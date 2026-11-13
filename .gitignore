@@ -1,0 +1,18 @@
+# 비밀값 — 공개 저장소라 절대 커밋하지 않는다
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+secrets/
+credentials*
+
+# 개인 배경 이미지(저작권 있는 사진) — 각자 로컬에만 둔다
+bg.jpg
+bg.png
+
+node_modules/
+*.log
+.DS_Store
