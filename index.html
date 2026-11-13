@@ -630,12 +630,53 @@ addEventListener('keydown', e => {
 // 배경 조커: bg.jpg 를 원래 색의 파티클로 바꾼다.
 // 흩어진 점이 모여 얼굴을 만들고, 꼬리를 끌며 꿈틀대고, 주기적으로 스캔 파동이 훑고 지나간다.
 // 마우스를 대면 비켜나고, 누르면 터졌다가 다시 모인다.
+// 10초마다 하트 → 유니콘 → 하트 요정 → … 30가지 모양으로 변했다가 조커로 돌아온다.
 (() => {
   const cv = document.getElementById('dots'), box = document.getElementById('canvas'), ctx = cv.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const im = new Image(); im.src = 'bg.jpg';
   let P = [], W = 0, H = 0, img, px, cx = 0, cy = 0, mx = -1e4, my = -1e4, born = 0, first = true;
   const bursts = [];
+  // 변신 모양: 이모지는 글꼴로 그리고, '하트 요정'은 직접 그린 오리지널 캐릭터
+  const SHAPES = ['❤️', '🦄', 'fairy', '🐱', '🐰', '🐻', '🐼', '🦊', '🐧', '🐥', '🐳', '🐙', '🦋', '🌸', '🌈',
+    '⭐', '🌙', '☀️', '🍓', '🍉', '🍩', '🧁', '🍦', '🎈', '🎁', '👑', '💎', '🚀', '👻', '🍀'];
+  const CYCLE = 10, shapeCache = {};
+  let size = 0, morph = { idx: -1, ok: false };
+  function fairy(c, n) {                                  // 하트 요정: 분홍 동그란 몸, 하트 더듬이, 날개
+    const u = n / 100, E = (x, y, rx, ry, col) => { c.fillStyle = col; c.beginPath(); c.ellipse(x * u, y * u, rx * u, ry * u, 0, 0, 7); c.fill(); };
+    const heart = (x, y, k, col) => { c.fillStyle = col; c.beginPath(); c.moveTo(x * u, (y + .3 * k) * u);
+      c.bezierCurveTo((x - k) * u, (y - .5 * k) * u, (x - .2 * k) * u, (y - k) * u, x * u, (y - .45 * k) * u);
+      c.bezierCurveTo((x + .2 * k) * u, (y - k) * u, (x + k) * u, (y - .5 * k) * u, x * u, (y + .3 * k) * u); c.fill(); };
+    E(22, 52, 16, 22, '#9ff3ff'); E(78, 52, 16, 22, '#9ff3ff');           // 날개
+    c.strokeStyle = '#ff5fa8'; c.lineWidth = 3 * u; c.beginPath(); c.moveTo(50 * u, 30 * u); c.quadraticCurveTo(46 * u, 18 * u, 50 * u, 12 * u); c.stroke();
+    heart(50, 12, 10, '#ff2e8a');                                          // 하트 더듬이
+    E(50, 58, 30, 30, '#ffb3d6'); E(50, 86, 18, 8, '#ff7fbf');            // 몸·치마
+    E(40, 54, 4.5, 6, '#3b1d3a'); E(60, 54, 4.5, 6, '#3b1d3a');           // 눈
+    E(41.5, 52, 1.6, 2, '#fff'); E(61.5, 52, 1.6, 2, '#fff');
+    E(33, 64, 5, 3, '#ff7fb0'); E(67, 64, 5, 3, '#ff7fb0');               // 볼터치
+    heart(50, 70, 5, '#ff2e8a');                                           // 입 대신 작은 하트
+  }
+  function shapePoints(k) {                               // 모양을 그려서 점(위치·색) 목록으로 만든다(0~1 좌표)
+    if (shapeCache[k]) return shapeCache[k];
+    const n = 120, c = document.createElement('canvas'); c.width = c.height = n;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    if (k === 'fairy') fairy(g, n);
+    else { g.font = `${n * .82}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(k, n / 2, n * .54); }
+    const d = g.getImageData(0, 0, n, n).data, out = [];
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const i = (y * n + x) * 4; if (d[i + 3] > 140) out.push([x / n, y / n, d[i], d[i + 1], d[i + 2]]); }
+    return shapeCache[k] = out.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  }
+  function setMorph(idx) {                                // 위에서부터 차례로 짝지어서 위는 위로, 아래는 아래로 모이게
+    const pts = shapePoints(SHAPES[idx]); morph = { idx, ok: pts.length > 50 };
+    if (!morph.ok) return;
+    const order = P.map((q, i) => i).sort((a, b) => P[a].hy - P[b].hy || P[a].hx - P[b].hx);
+    order.forEach((pi, j) => { const t = pts[Math.floor(j / order.length * pts.length)], q = P[pi];
+      q.tx = cx + (t[0] - .5) * size + (Math.random() - .5) * 2; q.ty = cy + (t[1] - .5) * size + (Math.random() - .5) * 2;
+      q.tr = Math.min(255, t[2] * 1.1); q.tg = Math.min(255, t[3] * 1.1); q.tb = Math.min(255, t[4] * 1.1); });
+  }
+  window.jokerMorph = i => { born = performance.now() / 1000 - 3 - i * CYCLE - 5.6; }; // 콘솔 확인용: i 번째 모양으로 바로
+  const easeIO = p => (p = Math.min(1, Math.max(0, p)), p < .5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
+  let M = 0;                                              // 변신 정도 0(조커) ~ 1(모양)
   function build() {
     W = cv.width = box.clientWidth; H = cv.height = box.clientHeight;
     if (!W || !H || !im.naturalWidth) return;
@@ -653,16 +694,24 @@ addEventListener('keydown', e => {
       P.push({ hx, hy, x: o ? o.x : first ? cx + Math.cos(a) * R : hx, y: o ? o.y : first ? cy + Math.sin(a) * R : hy, vx: 0, vy: 0,
         r: Math.min(255, r * 1.25), g: Math.min(255, g * 1.25), b: Math.min(255, b * 1.25), ph: Math.random() * 6.28, sp: 0, delay: Math.random() * .9 });
     }
+    size = Math.min(dh * .8, W * .4); morph.idx = -1;
     img = ctx.createImageData(W, H); px = img.data; first = false;
     if (still) { for (const q of P) { q.x = q.hx; q.y = q.hy; } draw(0); }
   }
   function step(t) {
-    const age = t - born, scan = (t % 7) / 7 * Math.max(W, H) * .9; // 7초마다 중심에서 퍼지는 스캔 링
+    const age = t - born, scan = (t % 2.5) / 2.5 * Math.max(W, H) * .9; // 2.5초마다 중심에서 퍼지는 스캔 링(변신 중에도 계속)
+    // 변신 주기(10초): 0~6초 조커 → 1.3초 동안 변신 → 모양 유지 → 마지막 1초에 조커로
+    const ct = age - 3, ph = ((ct % CYCLE) + CYCLE) % CYCLE, idx = Math.floor(ct / CYCLE) % SHAPES.length;
+    if (ct > 0 && ph > 5.5 && morph.idx !== idx) setMorph(idx);
+    M = ct > 0 && morph.ok && morph.idx === idx ? (ph < 6 ? 0 : ph < 7.3 ? easeIO((ph - 6) / 1.3) : ph < 9 ? 1 : easeIO((10 - ph) / 1)) : 0;
+    const puff = Math.sin(Math.PI * M) * .22;              // 변신 중간엔 살짝 부풀었다 모인다
     for (const q of P) {
+      const hx = M ? q.hx + (q.tx - q.hx) * M : q.hx, hy = M ? q.hy + (q.ty - q.hy) * M : q.hy;
+      const fx = hx + (hx - cx) * puff, fy = hy + (hy - cy) * puff;
       const k = Math.min(1, Math.max(0, (age - q.delay) / 1.6)) * .045;  // 등장: 늦게 출발한 점일수록 늦게 모인다
-      const wx = Math.sin(t * 1.4 + q.hy * .045 + q.ph) * 1.6 + Math.sin(t * .6 + q.hy * .012) * 3;
-      const wy = Math.cos(t * 1.2 + q.hx * .04 + q.ph) * 1.6 + Math.sin(t * .8 + q.hx * .01) * 2;
-      q.vx += (q.hx + wx - q.x) * k; q.vy += (q.hy + wy - q.y) * k;
+      const wx = Math.sin(t * 1.4 + hy * .045 + q.ph) * 1.6 + Math.sin(t * .6 + hy * .012) * 3;
+      const wy = Math.cos(t * 1.2 + hx * .04 + q.ph) * 1.6 + Math.sin(t * .8 + hx * .01) * 2;
+      q.vx += (fx + wx - q.x) * k; q.vy += (fy + wy - q.y) * k;
       let ex = q.x - mx, ey = q.y - my, d2 = ex * ex + ey * ey;
       if (d2 < 8100) { const d = Math.sqrt(d2) + 1, f = (1 - d / 90) * 2.2 / d; q.vx += ex * f; q.vy += ey * f; }
       for (const B of bursts) { ex = q.x - B.x; ey = q.y - B.y; d2 = ex * ex + ey * ey; if (d2 < 40000 && !B.done) { const d = Math.sqrt(d2) + 1, f = (1 - d / 200) * 14 / d; q.vx += ex * f + (Math.random() - .5) * 2; q.vy += ey * f + (Math.random() - .5) * 2; q.sp = 1; } }
@@ -680,7 +729,9 @@ addEventListener('keydown', e => {
       if (xi < 0 || yi < 0 || xi >= W - 1 || yi >= H - 1) continue;
       const v = Math.min(1, Math.hypot(q.vx, q.vy) / 6), s = q.sp;
       // 빠른 점은 핑크·시안으로 달아오르고, 스캔·반짝임은 흰빛
-      let r = q.r + (255 - q.r) * v * .9, g = q.g + (60 - q.g) * v * .6 + (240 - q.g) * v * .3, b = q.b + (220 - q.b) * v * .8;
+      let r = q.r, g = q.g, b = q.b;
+      if (M) { r += (q.tr - r) * M; g += (q.tg - g) * M; b += (q.tb - b) * M; }   // 모양의 색으로 물든다
+      r += (255 - r) * v * .9; g += (60 - g) * v * .6 + (240 - g) * v * .3; b += (220 - b) * v * .8;
       r += (255 - r) * s; g += (255 - g) * s; b += (255 - b) * s;
       const o = (yi * W + xi) * 4;
       for (const j of [o, o + 4, o + W * 4, o + W * 4 + 4]) { px[j] = r; px[j + 1] = g; px[j + 2] = b; px[j + 3] = 255; }
