@@ -708,7 +708,8 @@ addEventListener('keydown', e => {
     const puff = Math.sin(Math.PI * M) * .12;              // 변신할 때만 살짝 부풀었다 모인다
     // 음파: 주기마다 조커로 3초 있다가, 가운데서 2.5초 간격으로 링이 나와 8초에 걸쳐 아주 천천히 퍼진다
     const RING = 8, maxR = Math.max(W, H) * .9, rings = [], ci = Math.floor(ct / CYCLE);
-    if (ct > 0) for (const c of [ci - 1, ci]) for (let e = c * CYCLE + 3; e < (c + 1) * CYCLE; e += 2.5) { const d = ct - e; if (d >= 0 && d < RING) rings.push(d / RING * maxR); }
+    // 이번 주기의 조커 구간(3~25초)에 나온 링만 쓴다 → 조커로 돌아온 직후 3초는 음파가 없다
+    if (ct > 0) for (let e = ci * CYCLE + 3; e < ci * CYCLE + 25; e += 2.5) { const d = ct - e; if (d >= 0 && d < RING) rings.push(d / RING * maxR); }
     for (const q of P) {
       const hx = M ? q.hx + (q.tx - q.hx) * M : q.hx, hy = M ? q.hy + (q.ty - q.hy) * M : q.hy;
       const fx = hx + (hx - cx) * puff, fy = hy + (hy - cy) * puff;
