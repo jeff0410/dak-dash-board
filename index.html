@@ -630,7 +630,7 @@ addEventListener('keydown', e => {
 // 배경 조커: bg.jpg 를 원래 색의 파티클로 바꾼다.
 // 흩어진 점이 모여 얼굴을 만들고, 꼬리를 끌며 꿈틀대고, 주기적으로 스캔 파동이 훑고 지나간다.
 // 마우스를 대면 비켜나고, 누르면 터졌다가 다시 모인다.
-// 10초마다 하트 → 유니콘 → 하트 요정 → … 30가지 모양으로 변했다가 조커로 돌아온다.
+// 14초마다 하트 → 유니콘 → 하트 요정 → … 30가지 모양으로 변했다가 조커로 돌아온다.
 (() => {
   const cv = document.getElementById('dots'), box = document.getElementById('canvas'), ctx = cv.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -640,7 +640,7 @@ addEventListener('keydown', e => {
   // 변신 모양: 이모지는 글꼴로 그리고, '하트 요정'은 직접 그린 오리지널 캐릭터
   const SHAPES = ['❤️', '🦄', 'fairy', '🐱', '🐰', '🐻', '🐼', '🦊', '🐧', '🐥', '🐳', '🐙', '🦋', '🌸', '🌈',
     '⭐', '🌙', '☀️', '🍓', '🍉', '🍩', '🧁', '🍦', '🎈', '🎁', '👑', '💎', '🚀', '👻', '🍀'];
-  const CYCLE = 10, shapeCache = {};
+  const CYCLE = 14, shapeCache = {};
   let size = 0, morph = { idx: -1, ok: false };
   function fairy(c, n) {                                  // 하트 요정: 분홍 동그란 몸, 하트 더듬이, 날개
     const u = n / 100, E = (x, y, rx, ry, col) => { c.fillStyle = col; c.beginPath(); c.ellipse(x * u, y * u, rx * u, ry * u, 0, 0, 7); c.fill(); };
@@ -700,11 +700,11 @@ addEventListener('keydown', e => {
   }
   function step(t) {
     const age = t - born, scan = (t % 2.5) / 2.5 * Math.max(W, H) * .9; // 2.5초마다 중심에서 퍼지는 스캔 링(변신 중에도 계속)
-    // 변신 주기(10초): 0~6초 조커 → 1.3초 동안 변신 → 모양 유지 → 마지막 1초에 조커로
+    // 변신 주기(14초): 0~6초 조커 → 2.5초 동안 천천히 변신 → 3초 유지 → 2.5초 동안 조커로
     const ct = age - 3, ph = ((ct % CYCLE) + CYCLE) % CYCLE, idx = Math.floor(ct / CYCLE) % SHAPES.length;
     if (ct > 0 && ph > 5.5 && morph.idx !== idx) setMorph(idx);
-    M = ct > 0 && morph.ok && morph.idx === idx ? (ph < 6 ? 0 : ph < 7.3 ? easeIO((ph - 6) / 1.3) : ph < 9 ? 1 : easeIO((10 - ph) / 1)) : 0;
-    const puff = Math.sin(Math.PI * M) * .22;              // 변신 중간엔 살짝 부풀었다 모인다
+    M = ct > 0 && morph.ok && morph.idx === idx ? (ph < 6 ? 0 : ph < 8.5 ? easeIO((ph - 6) / 2.5) : ph < 11.5 ? 1 : easeIO((14 - ph) / 2.5)) : 0;
+    const puff = Math.sin(Math.PI * M) * .12;              // 변신 중간엔 살짝 부풀었다 모인다
     for (const q of P) {
       const hx = M ? q.hx + (q.tx - q.hx) * M : q.hx, hy = M ? q.hy + (q.ty - q.hy) * M : q.hy;
       const fx = hx + (hx - cx) * puff, fy = hy + (hy - cy) * puff;
