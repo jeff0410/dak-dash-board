@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createApp, totp, verifyTotp, b32encode, b32decode } from './server.mjs';
 
 const PW = 'correct-horse-battery';
-const newCfg = () => ({ DASH_USER: 'admin', DASH_PASSWORD: PW, TOTP_FILE: join(mkdtempSync(join(tmpdir(), 'dash-')), '.totp-secret') });
+const newCfg = () => ({ DASH_USER: 'admin', DASH_PASSWORD: PW, HOOK_TOKEN: 't', NO_SYNC: '1', TOTP_FILE: join(mkdtempSync(join(tmpdir(), 'dash-')), '.totp-secret') });
 
 async function withServer(cfg, fn) {
   const srv = createApp(cfg);
@@ -101,4 +101,49 @@ test('같은 주소에서 보낸 로그인은 통과하고, 다른 사이트에�
   assert.equal((await post(base, '/login', { user: 'admin', password: PW }, { Origin: base })).headers.get('location'), '/login/setup');
   assert.equal((await post(base, '/login', { user: 'admin', password: PW }, { Origin: 'https://evil.example' })).status, 403);
   assert.equal((await fetch(base + '/login')).headers.get('referrer-policy'), 'same-origin');
+}));
+
+test('훅 이벤트로 세션 · 서브에이전트 · 승인 상태가 바뀐다', async () => {
+  const { createStore } = await import('./agents.mjs');
+  const st = createStore({ capture: async () => 'Do you want to proceed?\n❯ 1. Yes' });
+  const base = { session_id: 'S1', cwd: '/home/dev/project/rtmc-project', permission_mode: 'bypassPermissions' };
+  const ev = (name, x = {}) => st.ingest({ ...base, hook_event_name: name, ...x }, '%7');
+  ev('UserPromptSubmit', { prompt: '공지 API 확인' });
+  ev('PreToolUse', { tool_name: 'Agent', tool_use_id: 't1', tool_input: { subagent_type: 'backend', description: '스펙 조회', prompt: 'GET /notice 찾기' } });
+  ev('PostToolUse', { tool_name: 'Agent', tool_use_id: 't1', tool_response: { isAsync: true } });
+  ev('PreToolUse', { tool_name: 'Grep', tool_use_id: 't2', agent_id: 'A1', agent_type: 'backend', tool_input: { pattern: 'notice' } });
+  let s = st.snapshot().sessions[0];
+  assert.equal(s.pane, '%7'); assert.equal(s.status, 'run'); assert.equal(s.dispatch.backend, 1);
+  assert.equal(s.agents.A1.status, 'run'); assert.equal(s.agents.A1.tool, 'Grep'); assert.equal(s.agents.A1.task, 'GET /notice 찾기');
+  ev('SubagentStop', { agent_id: 'A1', agent_type: 'backend', last_assistant_message: 'src/notice.controller.ts:18' });
+  s = st.snapshot().sessions[0];
+  assert.equal(s.agents.A1.status, 'done'); assert.equal(s.agents.A1.result, 'src/notice.controller.ts:18');
+  ev('PreToolUse', { tool_name: 'Bash', tool_use_id: 't3', tool_input: { command: 'rm -rf /tmp/x', description: '정리' } });
+  ev('Notification', { notification_type: 'permission_prompt', message: 'Claude needs your permission' });
+  await new Promise(r => setTimeout(r, 10));
+  s = st.snapshot().sessions[0];
+  assert.equal(s.status, 'appr'); assert.equal(s.approval.cmd, 'rm -rf /tmp/x'); assert.match(s.approval.screen, /proceed/);
+  ev('PostToolUse', { tool_name: 'Bash', tool_use_id: 't3', tool_response: { stdout: 'ok', stderr: '' } });
+  ev('PreToolUse', { tool_name: 'Edit', tool_use_id: 't4', tool_input: { file_path: '/a/b.ts', old_string: 'x', new_string: 'y\nz' } });
+  ev('PostToolUse', { tool_name: 'Edit', tool_use_id: 't4', tool_input: { file_path: '/a/b.ts', old_string: 'x', new_string: 'y\nz' } });
+  ev('Stop', { last_assistant_message: '끝', background_tasks: [] });
+  s = st.snapshot().sessions[0];
+  assert.equal(s.status, 'done'); assert.equal(s.answer, '끝'); assert.equal(s.approval, null);
+  assert.deepEqual([s.files[0].a, s.files[0].r], [2, 1]);
+  ev('UserPromptSubmit', { prompt: '<task-notification>\n<task-id>x</task-id>' });
+  assert.equal(st.snapshot().sessions[0].prompt, '공지 API 확인');          // 완료 알림은 지시가 아니다
+  ev('SubagentStop', { agent_id: 'INTERNAL', last_assistant_message: '추천 질문' });
+  assert.equal(st.snapshot().sessions[0].agents.INTERNAL, undefined);     // 종류 없는 내부 에이전트는 숨긴다
+  ev('SessionEnd'); assert.equal(st.snapshot().sessions.length, 0);
+});
+
+test('훅은 토큰이 맞고 애수기 안에서 온 것만 받는다', () => withServer({ ...newCfg(), HOOK_TOKEN: 'tok', NO_SYNC: '1' }, async base => {
+  const hook = (h, b = { session_id: 'Z', hook_event_name: 'UserPromptSubmit', prompt: 'hi', cwd: '/x' }) =>
+    fetch(base + '/hook', { method: 'POST', headers: { 'Content-Type': 'application/json', ...h }, body: JSON.stringify(b) });
+  assert.equal((await hook({ 'X-Hook-Token': 'nope' })).status, 403);
+  assert.equal((await hook({ 'X-Hook-Token': 'tok', 'X-Real-IP': '1.2.3.4' })).status, 403); // 10번 nginx 경유
+  assert.equal((await hook({ 'X-Hook-Token': 'tok' })).status, 204);
+  assert.equal((await fetch(base + '/api/state')).status, 401);       // 상태는 로그인해야 보인다
+  assert.equal((await fetch(base + '/events')).status, 401);
+  assert.equal((await fetch(base + '/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
 }));
