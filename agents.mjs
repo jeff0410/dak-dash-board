@@ -52,7 +52,7 @@ export async function gitChanges(cwd) {
     for (const p of nu.slice(0, 20)) {
       let t = ''; try { if (statSync(join(dir, p)).size < 200000) t = readFileSync(join(dir, p), 'utf8'); } catch {}
       if (t.includes('\0')) t = '';
-      const n = t ? lines(t) : [];
+      const n = t ? lines(t.replace(/\n$/, "")) : [];
       out.push({ path: pre + p, a: n.length, r: 0, diff: [['c', '⋯ 새 파일'], ...n.slice(0, 400).map(x => ['a', x])] });
     }
   }
