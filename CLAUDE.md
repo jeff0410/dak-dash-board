@@ -1,6 +1,6 @@
 # dak-dash-board
 
-여러 Claude Code 세션(rtmc-project 총괄 + 저장소별 에이전트)을 웹에서 관리하는 대시보드. 지금은 `index.html` 단일 파일 샘플(예시 데이터)이다.
+여러 Claude Code 세션(rtmc-project 총괄 + 저장소별 에이전트)을 웹에서 관리하는 대시보드. `server.mjs`(로그인·OTP·훅·SSE) + `agents.mjs`(세션 상태·tmux 제어) + `index.html`(화면), 훅은 `bin/hook.sh`.
 
 ## 보안 — 공개 저장소
 
@@ -36,4 +36,4 @@
 
 - `main` 직접 push 금지. 작업 브랜치(`feat/*`, `fix/*`, `refactor/*`, `chore/*`, `docs/*`)에서 작업하고 PR 로 머지한다.
 - 이미 push 한 커밋은 `--amend` / rebase 하지 않는다. push 전에만 정리한다.
-- **커밋 · 푸시 · PR 생성은 사용자가 명시적으로 요청할 때만 수행한다.**
+- **이 저장소는 요청 하나가 끝나면 묻지 않고 바로 커밋(논리 단위로 쪼갠다) → push → PR → 머지까지 한다.** 요청마다 새 브랜치를 따고, 머지 후 main 으로 돌아와 pull 한다.
