@@ -628,7 +628,7 @@ addEventListener('keydown', e => {
 });
 
 // 배경 조커: bg.jpg 를 원래 색의 파티클로 바꾼다.
-// 흩어진 점이 모여 얼굴을 만들고, 꼬리를 끌며 꿈틀대고, 주기적으로 스캔 파동이 훑고 지나간다.
+// 흩어진 점이 모여 얼굴을 만들고, 꼬리를 끌며 꿈틀대고, 가운데서 음파처럼 링이 천천히 퍼진다.
 // 마우스를 대면 비켜나고, 누르면 터졌다가 다시 모인다.
 // 25초마다 하트 → 유니콘 → 하트 요정 → … 30가지 모양으로 변했다가 조커로 돌아온다.
 (() => {
@@ -699,13 +699,16 @@ addEventListener('keydown', e => {
     if (still) { for (const q of P) { q.x = q.hx; q.y = q.hy; } draw(0); }
   }
   function step(t) {
-    const age = t - born, scan = (t % 2.5) / 2.5 * Math.max(W, H) * .9; // 2.5초마다 중심에서 퍼지는 스캔 링(변신 중에도 계속)
-    // 변신 주기: 조커 25초(3초 뒤부터 아주 천천히 부풂) → 1.3초 만에 변신 → 3초 유지 → 2.5초 동안 조커로
+    const age = t - born;
+    // 변신 주기: 조커 25초 → 1.3초 만에 변신 → 3초 유지 → 2.5초 동안 조커로
     const ct = age - 3, ph = ((ct % CYCLE) + CYCLE) % CYCLE, idx = Math.floor(ct / CYCLE) % SHAPES.length;
     if (ct > 0 && ph > 24.5 && morph.idx !== idx) setMorph(idx);
     M = ct > 0 && morph.ok && morph.idx === idx ? (ph < 25 ? 0 : ph < 26.3 ? easeIO((ph - 25) / 1.3) : ph < 29.3 ? 1 : easeIO((CYCLE - ph) / 2.5)) : 0;
     // 부풀기: 조커로 3초 있다가 25초까지 아주 천천히 부풀고, 변신하면서 꺼지고, 돌아올 때 살짝 부풀었다 모인다
-    const puff = ct <= 0 ? 0 : ph < 25 ? .12 * easeIO((ph - 3) / 22) : ph < 26.3 ? .12 * (1 - M) : ph < 29.3 ? 0 : Math.sin(Math.PI * M) * .12;
+    const puff = Math.sin(Math.PI * M) * .12;              // 변신할 때만 살짝 부풀었다 모인다
+    // 음파: 주기마다 조커로 3초 있다가, 가운데서 2.5초 간격으로 링이 나와 8초에 걸쳐 아주 천천히 퍼진다
+    const RING = 8, maxR = Math.max(W, H) * .9, rings = [], ci = Math.floor(ct / CYCLE);
+    if (ct > 0) for (const c of [ci - 1, ci]) for (let e = c * CYCLE + 3; e < (c + 1) * CYCLE; e += 2.5) { const d = ct - e; if (d >= 0 && d < RING) rings.push(d / RING * maxR); }
     for (const q of P) {
       const hx = M ? q.hx + (q.tx - q.hx) * M : q.hx, hy = M ? q.hy + (q.ty - q.hy) * M : q.hy;
       const fx = hx + (hx - cx) * puff, fy = hy + (hy - cy) * puff;
@@ -716,8 +719,8 @@ addEventListener('keydown', e => {
       let ex = q.x - mx, ey = q.y - my, d2 = ex * ex + ey * ey;
       if (d2 < 8100) { const d = Math.sqrt(d2) + 1, f = (1 - d / 90) * 2.2 / d; q.vx += ex * f; q.vy += ey * f; }
       for (const B of bursts) { ex = q.x - B.x; ey = q.y - B.y; d2 = ex * ex + ey * ey; if (d2 < 40000 && !B.done) { const d = Math.sqrt(d2) + 1, f = (1 - d / 200) * 14 / d; q.vx += ex * f + (Math.random() - .5) * 2; q.vy += ey * f + (Math.random() - .5) * 2; q.sp = 1; } }
-      ex = q.x - cx; ey = q.y - cy; const dc = Math.sqrt(ex * ex + ey * ey), band = Math.abs(dc - scan);
-      if (age > 2.5 && band < 10) { q.sp = Math.max(q.sp, 1 - band / 10); q.vx += ex / (dc + 1) * .5; q.vy += ey / (dc + 1) * .5; }
+      ex = q.x - cx; ey = q.y - cy; const dc = Math.sqrt(ex * ex + ey * ey);
+      for (const R of rings) { const band = Math.abs(dc - R); if (band < 14) { q.sp = Math.max(q.sp, (1 - band / 14) * .8); q.vx += ex / (dc + 1) * .25; q.vy += ey / (dc + 1) * .25; } }
       if (Math.random() < .0008) q.sp = 1;               // 반짝임
       q.vx *= .86; q.vy *= .86; q.x += q.vx; q.y += q.vy; q.sp *= .93;
     }
