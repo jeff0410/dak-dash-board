@@ -147,3 +147,11 @@ test('훅은 토큰이 맞고 애수기 안에서 온 것만 받는다', () => w
   assert.equal((await fetch(base + '/events')).status, 401);
   assert.equal((await fetch(base + '/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
 }));
+
+test('git diff 를 파일별 +/- 와 줄로 바꾼다', async () => {
+  const { parseDiff } = await import('./agents.mjs');
+  const f = parseDiff('diff --git a/src/a.ts b/src/a.ts\nindex 1..2 100644\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,2 @@ fn\n keep\n-old\n+new\n+more', 'home/');
+  assert.equal(f.length, 1); assert.equal(f[0].path, 'home/src/a.ts');
+  assert.deepEqual([f[0].a, f[0].r], [2, 1]);
+  assert.deepEqual(f[0].diff, [['c', '⋯ fn'], ['c', 'keep'], ['r', 'old'], ['a', 'new'], ['a', 'more']]);
+});
