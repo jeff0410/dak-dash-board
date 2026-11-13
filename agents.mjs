@@ -1,6 +1,6 @@
 // Claude Code 훅 이벤트 → 세션 상태. tmux 로 지시·승인·멈추기를 보낸다.
 import { execFile } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -23,6 +23,41 @@ const argOf = (tool, i = {}) => tool === 'Agent' || tool === 'Task'
   : i.command ?? i.file_path ?? i.pattern ?? i.path ?? i.url ?? i.query ?? i.description ?? cut(i, 120);
 const push = (arr, x, max = 80) => { arr.push(x); if (arr.length > max) arr.splice(0, arr.length - max); };
 const lines = s => String(s ?? '').split('\n');
+
+// 작업 폴더의 실제 git 변경 (서브에이전트 · Bash 수정까지 포함). 폴더가 레포가 아니면 바로 아래 레포들을 본다.
+const git = (dir, ...a) => new Promise(ok => execFile('git', ['-C', dir, ...a], { timeout: 4000, maxBuffer: 8 << 20 }, (e, out) => ok(e ? null : out)));
+export function parseDiff(out, pre = '') {
+  const files = []; let f = null;
+  for (const l of String(out).split('\n')) {
+    if (l.startsWith('diff --git ')) files.push(f = { path: pre + l.replace(/^diff --git a\/.* b\//, ''), a: 0, r: 0, diff: [] });
+    else if (!f || /^(index |--- |\+\+\+ |new file|deleted file|similarity|rename |old mode|new mode|Binary)/.test(l)) continue;
+    else if (l.startsWith('@@')) f.diff.push(['c', '⋯ ' + l.replace(/^@@[^@]*@@ ?/, '')]);
+    else if (l[0] === '+') { f.a++; f.diff.push(['a', l.slice(1)]); }
+    else if (l[0] === '-') { f.r++; f.diff.push(['r', l.slice(1)]); }
+    else if (l[0] === ' ') f.diff.push(['c', l.slice(1)]);
+  }
+  for (const x of files) if (x.diff.length > 400) x.diff.splice(400, x.diff.length, ['c', '⋯ 이하 생략']);
+  return files;
+}
+export async function gitChanges(cwd) {
+  if (!cwd) return null;
+  let repos = [];
+  if (await git(cwd, 'rev-parse', '--git-dir') !== null) repos = [[cwd, '']];
+  else try { repos = readdirSync(cwd, { withFileTypes: true }).filter(d => d.isDirectory() && existsSync(join(cwd, d.name, '.git'))).map(d => [join(cwd, d.name), d.name + '/']); } catch {}
+  if (!repos.length) return null;
+  const out = [];
+  for (const [dir, pre] of repos) {
+    out.push(...parseDiff(await git(dir, 'diff', 'HEAD', '--no-color', '--no-ext-diff', '-U2') || '', pre));
+    const nu = String(await git(dir, 'ls-files', '--others', '--exclude-standard', '-z') || '').split('\0').filter(p => p && !p.startsWith(".serena/"));
+    for (const p of nu.slice(0, 20)) {
+      let t = ''; try { if (statSync(join(dir, p)).size < 200000) t = readFileSync(join(dir, p), 'utf8'); } catch {}
+      if (t.includes('\0')) t = '';
+      const n = t ? lines(t) : [];
+      out.push({ path: pre + p, a: n.length, r: 0, diff: [['c', '⋯ 새 파일'], ...n.slice(0, 400).map(x => ['a', x])] });
+    }
+  }
+  return out.slice(0, 40);
+}
 
 function addFile(target, tool, i = {}) {
   const path = i.file_path; if (!path) return;
@@ -57,6 +92,12 @@ export function createStore({ onChange = () => {}, capture = pane => tmux('captu
     s.last = now();
     return s;
   }
+  // 수정 · 명령 · 완료 뒤 1.5초 모아서 git 변경을 다시 읽는다
+  const gt = new Map();
+  const refreshGit = s => { clearTimeout(gt.get(s.id)); const t = setTimeout(async () => {
+    const g = await gitChanges(s.cwd);
+    if (S.has(s.id) && JSON.stringify(g) !== JSON.stringify(s.git ?? null)) { s.git = g; onChange(); }
+  }, 1500); t.unref?.(); gt.set(s.id, t); };
   const settleRunning = t => t.feed.forEach(x => { if (x.st === 'run' && x.tool !== 'Agent') x.st = 'ok'; });
 
   function ingest(e, pane) {
@@ -74,6 +115,7 @@ export function createStore({ onChange = () => {}, capture = pane => tmux('captu
     }
     const tg = ag || s;
 
+    if (['SessionStart', 'PostToolUse', 'Stop', 'SubagentStop'].includes(ev)) refreshGit(s);
     if (ev === 'SessionStart') { if (e.model) s.model = e.model; L(s, '세션 시작'); }
     else if (ev === 'UserPromptSubmit' && /^\s*<task-notification>/.test(e.prompt || '')) {
       s.status = 'run'; // 백그라운드 에이전트 완료 알림 — 사용자 지시가 아니다
@@ -140,6 +182,7 @@ export function createStore({ onChange = () => {}, capture = pane => tmux('captu
     const panes = new Map(String(out).trim().split('\n').filter(Boolean).map(l => l.split('\t')));
     let ch = false;
     for (const s of S.values()) {
+      refreshGit(s); // 훅 밖에서 바뀐 것도 10초 안에 보인다
       if (!s.pane) continue;
       if (!panes.has(s.pane)) { L(s, 'tmux 창 닫힘'); S.delete(s.id); ch = true; }
       else if (s.tmux !== panes.get(s.pane)) { s.tmux = panes.get(s.pane); ch = true; }
