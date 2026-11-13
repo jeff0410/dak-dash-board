@@ -130,7 +130,7 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 .zoom{position:absolute;right:14px;bottom:12px;z-index:5;display:flex;border:1px solid var(--line2);border-radius:9px;background:rgba(27,21,40,.85);overflow:hidden}
 .zoom button{width:32px;height:30px;color:var(--sub)}.zoom button:hover{background:var(--card);color:var(--text)}
 /* live grid */
-.lgrid{position:absolute;inset:0;z-index:3;padding:58px 14px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));grid-auto-rows:minmax(230px,1fr);gap:12px;overflow:auto}
+.lgrid{position:absolute;inset:0;z-index:3;padding:58px 14px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));grid-auto-rows:minmax(230px,1fr);gap:12px;overflow:auto}
 .tile{background:rgba(42,33,64,.9);border:1px solid var(--line2);border-radius:14px;display:flex;flex-direction:column;overflow:hidden;cursor:pointer;backdrop-filter:blur(4px)}
 .tile.sel{border-color:var(--pink);box-shadow:0 0 0 1px var(--pink)}
 .tile.appr{border-color:var(--hot);box-shadow:0 0 20px rgba(255,46,151,.35)} .tile.stall{border-color:var(--orange)}
@@ -147,7 +147,8 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 .panel{width:540px;flex:none;border-left:1px solid var(--line);background:var(--bg2);display:flex;flex-direction:column;min-width:0}
 .ph{padding:14px 18px 0;border-bottom:1px solid var(--line)}
 .ph .r1{gap:10px}
-.ph .title{font-size:19px;font-weight:800}
+.ph .title{font-size:19px;font-weight:800;white-space:nowrap}
+.ph .r1{flex-wrap:wrap;row-gap:6px}.bigst,.pbtn{white-space:nowrap}
 .bigst{display:flex;align-items:center;gap:8px;padding:4px 12px;border-radius:99px;font-weight:700;font-size:13px;border:1px solid}
 .bigst.run{color:var(--cyan);border-color:rgba(54,249,246,.5);background:rgba(54,249,246,.08);text-shadow:var(--glow-c)}
 .bigst.appr{color:var(--pink);border-color:var(--hot);background:rgba(255,46,151,.1)}
@@ -218,14 +219,14 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 .v{color:var(--pink)}
 
 /* ---------- toast / palette ---------- */
-.toasts{position:fixed;top:68px;right:560px;z-index:50;display:flex;flex-direction:column;gap:8px}
+.toasts{position:fixed;top:68px;right:calc(clamp(360px,34vw,540px) + 20px);z-index:50;display:flex;flex-direction:column;gap:8px}
 .toast{min-width:280px;max-width:360px;background:var(--card2);border:1px solid var(--line2);border-left:3px solid var(--cyan);border-radius:10px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.45);animation:tin .25s ease-out;cursor:pointer}
 .toast.appr{border-left-color:var(--hot)} .toast.done{border-left-color:var(--green)}
 .toast b{display:block;margin-bottom:2px}.toast span{font-size:12.5px;color:var(--sub)}
 @keyframes tin{from{transform:translateX(30px);opacity:0}}
 .pal{position:fixed;inset:0;z-index:60;background:rgba(10,6,18,.6);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;padding-top:12vh}
 .pal.open{display:flex}
-.palbox{width:560px;background:var(--card);border:1px solid var(--pink);border-radius:14px;box-shadow:0 0 40px rgba(255,46,151,.3);overflow:hidden}
+.palbox{width:min(560px,calc(100vw - 24px));background:var(--card);border:1px solid var(--pink);border-radius:14px;box-shadow:0 0 40px rgba(255,46,151,.3);overflow:hidden}
 .palbox input{width:100%;height:52px;background:none;border:0;border-bottom:1px solid var(--line);outline:none;padding:0 18px;font-size:16px}
 .palist{max-height:340px;overflow:auto;padding:6px}
 .pi{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer}
@@ -247,6 +248,40 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 .term{margin-top:10px;background:#0a0710;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:12px/1.55 "JetBrains Mono",monospace;color:#d9d0ee;white-space:pre-wrap;max-height:260px;overflow:auto}
 .livebox{border:1px solid transparent;border-radius:12px;background:var(--card);padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:13px}
 .livebox .mono{color:var(--yellow);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- 반응형 ---------- */
+.left{width:clamp(220px,20vw,310px)}
+.panel{width:clamp(360px,34vw,540px)}
+.seg button{white-space:nowrap}
+.ctool .keys{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.stream .tl{width:auto;max-width:45%;overflow:hidden;text-overflow:ellipsis}
+.ln>span[style*="--yellow"]{max-width:45%;overflow:hidden;text-overflow:ellipsis}
+.crow{flex-wrap:wrap;row-gap:6px}.crow .lbl,.crow .kh{white-space:nowrap}
+@media (max-width:1280px){.ctool .keys,.crow .kh{display:none}}
+@media (max-width:860px){
+  /* 태블릿·모바일: 목록 → 조직도 → 상세·지시 순서로 세로로 쌓고, 페이지가 스크롤된다 */
+  html,body{height:auto}body{overflow:auto}
+  .body{flex-direction:column}
+  .left{width:auto;max-height:38vh;border-right:0;border-bottom:1px solid var(--line)}
+  .center{height:58vh;min-height:360px;flex:none}
+  .panel{width:auto;border-left:0;border-top:1px solid var(--line)}
+  .pbody{overflow:visible;flex:none}
+  header{overflow-x:auto;scrollbar-width:none;padding:0 12px;gap:8px}header>*{flex:none}header::-webkit-scrollbar{display:none}
+  .toasts{left:12px;right:12px;top:66px}.toast{min-width:0;max-width:none}
+  .act.open{height:40vh}
+}
+@media (max-width:560px){
+  .logo{font-size:16px;margin-right:4px}.logo small{display:none}
+  .chip{height:28px;padding:0 9px;font-size:12px}
+  #openPal,.kbtn[title]{padding:0 8px}
+  .ctool{left:8px;right:8px;top:8px}.seg button{padding:5px 9px;font-size:12px}
+  .legend{display:none}
+  .ph,.pbody{padding-left:12px;padding-right:12px}
+  .compose{padding:10px 12px 12px;position:sticky;bottom:0;background:var(--bg2);z-index:6}
+  .cbox textarea{font-size:16px}               /* iOS 확대 방지 */
+  .crow .lbl{display:none}.target{flex:1;min-width:0}
+  .pal{padding-top:8vh}
+}
 </style>
 <header>
   <div class="logo">JEFF AGENTS<small>애수기</small></div>
@@ -270,7 +305,7 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
     <div class="ctool">
       <div class="seg"><button data-v="graph" class="on">◇ 조직도</button><button data-v="grid">▦ 라이브 그리드</button></div>
       <span class="sp"></span>
-      <span style="font-size:12px;color:var(--dim)"><kbd>G</kbd> 보기 전환 · <kbd>J</kbd><kbd>K</kbd> 이동 · <kbd>1</kbd> 허용 · <kbd>2</kbd> 항상 허용 · <kbd>Esc</kbd> 거절</span>
+      <span class="keys" style="font-size:12px;color:var(--dim)"><kbd>G</kbd> 보기 전환 · <kbd>J</kbd><kbd>K</kbd> 이동 · <kbd>1</kbd> 허용 · <kbd>2</kbd> 항상 허용 · <kbd>Esc</kbd> 거절</span>
     </div>
     <div class="canvas" id="canvas">
       <canvas class="bgimg" id="dots"></canvas><div class="grid3d"></div>
@@ -293,7 +328,7 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
     <div class="compose">
       <div class="cbox">
         <textarea id="input" placeholder="지시 입력 — 받는 세션의 tmux 창에 그대로 입력돼요"></textarea>
-        <div class="crow">받는 세션 <select class="target" id="target"></select><span class="sp"></span><span>Enter 보내기 · Shift+Enter 줄바꿈</span><button class="send" id="send">보내기 ➤</button></div>
+        <div class="crow"><span class="lbl">받는 세션</span><select class="target" id="target"></select><span class="sp"></span><span class="kh">Enter 보내기 · Shift+Enter 줄바꿈</span><button class="send" id="send">보내기 ➤</button></div>
       </div>
       <div class="chint" id="chint"></div>
     </div>
@@ -317,7 +352,7 @@ const RO = { backend: 1 };
 const LBL = { run: '작업 중', appr: '승인 필요', stall: '응답 없음', idle: '대기', done: '완료' };
 
 let snap = { now: Date.now(), sessions: [], log: [] }, skew = 0, sel = null, view = 'graph', tab = 'now', filter = null;
-let scale = 1, tx = 0, ty = 0, fitted = false;
+let scale = 1, tx = 0, ty = 0, fitted = false, manual = false, lastW = 0; // manual: 사용자가 확대·이동하면 자동 맞춤을 멈춘다
 const openFiles = new Set(), prevSt = {};
 const now = () => Date.now() + skew;
 const syncD = () => `--d:-${(performance.now() % 2400) / 1000}s`;
@@ -437,7 +472,8 @@ function renderGraph(all) {
   const stg = $('#stage'); stg.style.width = W + 'px'; stg.style.height = H + 'px';
   stg.innerHTML = `<svg width="${W}" height="${H}" style="position:absolute;inset:0;overflow:visible">${e}</svg>${h}${badges}`;
   stg.querySelectorAll('.node[data-k]').forEach(n => n.onclick = ev => { ev.stopPropagation(); if (n.dataset.k.includes(':')) select(n.dataset.k); });
-  if (!fitted) { fit(); fitted = true; }
+  if (!fitted || (!manual && W !== lastW)) { fit(); fitted = true; lastW = W; }  // 세션이 늘어 조직도가 넓어지면 다시 맞춘다
+  if (!userView && view === 'graph' && scale < .5) setView('grid');               // 글자가 안 보일 만큼 작아지면 라이브 그리드로
 }
 
 /* ---------- 라이브 그리드 ---------- */
@@ -445,7 +481,7 @@ function renderGrid(all) {
   if (view !== 'grid') return;
   $('#lgrid').innerHTML = all.filter(i => i.kind === 's' || i.x).map(it => {
     const st = it.st, x = it.x;
-    const lines = (x.feed || []).slice(-7).map(f => `<div class="ln">${tIcon(f)}<span style="color:var(--yellow);flex:none">${esc(f.tool)}</span><span class="a">${esc(f.arg)}</span></div>`).join('') || '<div class="ln" style="color:var(--dim)">아직 기록 없음</div>';
+    const lines = (x.feed || []).slice(-7).map(f => `<div class="ln">${tIcon(f)}<span style="color:var(--yellow);flex:none">${esc(tn(f.tool))}</span><span class="a">${esc(f.arg)}</span></div>`).join('') || '<div class="ln" style="color:var(--dim)">아직 기록 없음</div>';
     const bar = st === 'stall' ? `<div class="warnbar">⚠ ${Math.floor((now() - x.last) / 1000)}초째 출력 없음</div>` : st === 'appr' && x.approval ? `<div class="apbar">⏸ 승인 대기 — <span class="mono">${esc(x.approval.cmd || x.approval.msg)}</span></div>` : '';
     const say = it.kind === 's' ? (st === 'run' ? '' : x.answer) : x.result;
     return `<div class="tile ${st} ${sel === it.key ? 'sel' : ''} ${st === 'run' ? 'neon-run' : ''}" style="${syncD()}" data-k="${esc(it.key)}">
@@ -488,7 +524,7 @@ function renderPanel(all) {
     if (st === 'run') h += `<div class="livebox neon-run" style="${syncD()}"><span class="spin"></span><b>${x.tool ? esc(x.tool) : '생각 중'}</b><span class="mono">${esc(x.arg || '')}</span></div>`;
     const ans = it.kind === 's' ? x.answer : x.result;
     if (ans) h += `<div class="answer"><div class="ah2"><span class="lbl">CLAUDE</span>${st === 'done' ? '<span class="ok">✓</span> 완료' : '마지막 답변'}</div><div class="atext">${esc(ans)}</div></div>`;
-    if ((x.feed || []).length) h += `<div class="stream">${x.feed.slice(-14).map(f => `<div class="ln ${f.st === 'run' ? 'cur' : ''}"><time>${hhmm(f.t)}</time>${tIcon(f)}<span class="tl">${esc(f.tool)}</span><span class="a" style="color:${f.st === 'run' ? 'var(--text)' : 'var(--sub)'}">${esc(f.arg)}</span></div>`).join('')}</div>`;
+    if ((x.feed || []).length) h += `<div class="stream">${x.feed.slice(-14).map(f => `<div class="ln ${f.st === 'run' ? 'cur' : ''}"><time>${hhmm(f.t)}</time>${tIcon(f)}<span class="tl">${esc(tn(f.tool))}</span><span class="a" style="color:${f.st === 'run' ? 'var(--text)' : 'var(--sub)'}">${esc(f.arg)}</span></div>`).join('')}</div>`;
     if (!h) h = '<div class="empty">대기 중이에요.</div>';
   } else if (tab === 'files') {
     h = files.length ? files.map(f => `<div class="file ${openFiles.has(f.path) ? 'open' : ''}" data-p="${esc(f.path)}"><div class="fh"><span style="color:var(--dim)">▸</span><span class="mono">${esc(f.path.split('/').pop())}</span><span class="path mono">${esc(f.path)}</span><span class="mono"><span class="plus">+${f.a}</span> <span class="minus">−${f.r}</span></span></div><div class="diff">${f.diff.map(([k, t]) => `<div class="${k}">${k === 'a' ? '+ ' : k === 'r' ? '- ' : '  '}${esc(t)}</div>`).join('')}</div></div>`).join('') : `<div class="empty">이번 지시에서 바꾼 파일이 없어요${RO[it.type] ? ' (읽기 전용)' : ''}</div>`;
@@ -575,16 +611,21 @@ function select(k) { sel = k; tab = 'now'; $('#target').dataset.manual = ''; ren
 
 /* ---------- 보기 · 확대 · 단축키 · 팔레트 ---------- */
 function setView(v) { view = v; document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); $('#lgrid').hidden = v !== 'grid'; $('#stage').style.display = $('#zoom').style.display = $('#legend').style.display = v === 'graph' ? '' : 'none'; render(); if (v === 'graph') fit(); }
-document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.v));
+let userView = false;                                   // 사용자가 보기를 고르면 자동 전환을 멈춘다
+const pickView = v => { userView = true; setView(v); };
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => pickView(b.dataset.v));
 document.querySelectorAll('.chip[data-f]').forEach(b => b.onclick = () => { filter = filter === b.dataset.f ? null : b.dataset.f; if (b.dataset.f === 'appr') { const a = items().find(i => i.st === 'appr'); a && (sel = a.key); } render(); });
 function applyT() { $('#stage').style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
+// 도구 이름 줄이기: mcp__playwright__browser_evaluate → playwright·evaluate
+const tn = t => String(t || '').startsWith('mcp__') ? t.replace(/^mcp__(plugin_[a-z0-9-]+_)?/, '').replace('__', '·').replace('browser_', '') : t;
 function fit() { const c = $('#canvas'), w = c.clientWidth, h = c.clientHeight - 50; scale = Math.min(w / W, h / H, 1.3) * .94; tx = (w - W * scale) / 2; ty = 44 + (h - H * scale) / 2; applyT(); }
 const cv = $('#canvas'); let drag = null;
 cv.addEventListener('mousedown', e => { if (view !== 'graph' || e.target.closest('.node,.zoom,.emptyc div')) return; drag = [e.clientX - tx, e.clientY - ty]; });
-addEventListener('mousemove', e => { if (drag) { tx = e.clientX - drag[0]; ty = e.clientY - drag[1]; applyT(); } });
+addEventListener('mousemove', e => { if (drag) { manual = true; tx = e.clientX - drag[0]; ty = e.clientY - drag[1]; applyT(); } });
 addEventListener('mouseup', () => drag = null);
-cv.addEventListener('wheel', e => { if (view !== 'graph') return; e.preventDefault(); const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, k = e.deltaY < 0 ? 1.1 : .9; tx = mx - (mx - tx) * k; ty = my - (my - ty) * k; scale *= k; applyT(); }, { passive: false });
-$('#zi').onclick = () => { scale *= 1.15; applyT(); }; $('#zo').onclick = () => { scale /= 1.15; applyT(); }; $('#zf').onclick = fit;
+cv.addEventListener('wheel', e => { if (view !== 'graph') return; e.preventDefault(); const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, k = e.deltaY < 0 ? 1.1 : .9; manual = true; tx = mx - (mx - tx) * k; ty = my - (my - ty) * k; scale *= k; applyT(); }, { passive: false });
+$('#zi').onclick = () => { manual = true; scale *= 1.15; applyT(); }; $('#zo').onclick = () => { manual = true; scale /= 1.15; applyT(); }; $('#zf').onclick = () => { manual = false; fit(); };
+new ResizeObserver(() => { if (!manual && view === 'graph') fit(); }).observe($('#canvas'));  // 창 크기가 바뀌면 다시 맞춘다
 addEventListener('resize', fit);
 $('#acth').onclick = () => { const a = $('#act'); a.classList.toggle('open'); $('#afold').textContent = a.classList.contains('open') ? '접기 ▾' : '펼치기 ▴'; setTimeout(fit, 220); };
 $('#send').onclick = send;
@@ -600,7 +641,7 @@ setInterval(() => {
 const PAL = () => [
   ...items().filter(i => i.kind === 's' || i.x).map(i => ({ t: `${i.nm} 열기`, k: LBL[i.st], f: () => select(i.key) })),
   { t: '승인 대기로 이동', k: '', f: () => { const a = items().find(i => i.st === 'appr'); a && select(a.key); } },
-  { t: '라이브 그리드 보기', k: 'G', f: () => setView('grid') }, { t: '조직도 보기', k: 'G', f: () => setView('graph') },
+  { t: '라이브 그리드 보기', k: 'G', f: () => pickView('grid') }, { t: '조직도 보기', k: 'G', f: () => pickView('graph') },
   { t: '지시 쓰기', k: '', f: () => $('#input').focus() },
   { t: '활동 로그 펼치기/접기', k: '', f: () => $('#acth').click() },
 ];
@@ -622,7 +663,7 @@ addEventListener('keydown', e => {
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   if (typing) { if (e.key === 'Escape') document.activeElement.blur(); return; }
   if (e.key === '/') { e.preventDefault(); $('#q').focus(); }
-  else if (e.key === 'g') setView(view === 'graph' ? 'grid' : 'graph');
+  else if (e.key === 'g') pickView(view === 'graph' ? 'grid' : 'graph');
   else if (e.key === 'j' || e.key === 'k') { const all = items(); if (!all.length) return; const i = all.findIndex(x => x.key === sel); select(all[(i + (e.key === 'j' ? 1 : -1) + all.length) % all.length].key); }
   else if (e.key === '1') decide('yes'); else if (e.key === '2') decide('always'); else if (e.key === 'Escape') decide('no');
 });
@@ -680,7 +721,7 @@ addEventListener('keydown', e => {
   function build() {
     W = cv.width = box.clientWidth; H = cv.height = box.clientHeight;
     if (!W || !H || !im.naturalWidth) return;
-    const dh = Math.round(H * .495), dw = Math.round(im.naturalWidth * dh / im.naturalHeight);
+    const dh = Math.round(Math.min(H * .495, W * .55)), dw = Math.round(im.naturalWidth * dh / im.naturalHeight);
     const ox = (W - dw) / 2, oy = H * .4 - dh / 2, step = 3;
     cx = W / 2; cy = H * .4;
     const t = document.createElement('canvas'); t.width = dw; t.height = dh;
@@ -755,7 +796,7 @@ addEventListener('keydown', e => {
 
 fetch('/api/state', { cache: 'no-store' }).then(r => r.status === 401 ? (location.href = '/login') : r.json()).then(d => d && apply(d)).catch(() => {});
 connect();
-setView('graph');
+setView(matchMedia('(max-width:560px)').matches ? 'grid' : 'graph');  // 폰에선 조직도가 너무 작아져 라이브 그리드로 시작
 </script>
 </body>
 </html>
