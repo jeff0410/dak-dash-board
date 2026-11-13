@@ -234,23 +234,34 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 </style>
 </head>
 <body>
+<style>
+.sess.child{margin-left:16px;padding:9px 12px}
+.sess.child .nm{font-size:14px}
+.sess.ghost{opacity:.55}
+.conn{font-size:12px;display:flex;align-items:center;gap:6px}
+.conn.ok{color:var(--green);text-shadow:0 0 8px rgba(114,241,184,.6)} .conn.bad{color:var(--red)}
+.emptyc{position:absolute;inset:0;z-index:4;display:grid;place-items:center;pointer-events:none}
+.emptyc div{pointer-events:auto;background:rgba(27,21,40,.88);border:1px solid var(--line2);border-radius:14px;padding:22px 26px;max-width:520px;line-height:1.7;color:var(--sub)}
+.emptyc b{color:var(--text)} .emptyc code{font-family:"JetBrains Mono";color:var(--yellow);background:rgba(15,10,24,.7);padding:2px 6px;border-radius:5px;font-size:12.5px}
+.term{margin-top:10px;background:#0a0710;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:12px/1.55 "JetBrains Mono",monospace;color:#d9d0ee;white-space:pre-wrap;max-height:260px;overflow:auto}
+.livebox{border:1px solid transparent;border-radius:12px;background:var(--card);padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:13px}
+.livebox .mono{color:var(--yellow);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+</style>
 <header>
   <div class="logo">JEFF AGENTS<small>애수기</small></div>
   <button class="chip" data-f="run"><span class="eq"><i></i><i></i><i></i></span>작업 중 <b id="nRun">0</b></button>
   <button class="chip" data-f="appr" id="chAppr"><span class="dot bg-appr"></span>승인 필요 <b id="nAppr">0</b></button>
   <button class="chip" data-f="stall"><span class="dot bg-stall"></span>응답 없음 <b id="nStall">0</b></button>
-  <button class="chip" data-f="idle"><span class="dot bg-idle"></span>대기 <b id="nIdle">0</b></button>
+  <button class="chip" data-f="idle"><span class="dot bg-idle"></span>대기 · 완료 <b id="nIdle">0</b></button>
   <span class="sp"></span>
-  <div class="usage">Claude 5h <b>32%</b><span class="mini"><i style="width:32%"></i></span>주간 <b>21%</b><span class="mini"><i style="width:21%"></i></span></div>
   <button class="kbtn" id="openPal">명령 <kbd>⌘K</kbd></button>
-  <button class="new">+ 새 세션</button>
   <form method="post" action="/logout" style="display:contents"><button class="kbtn" title="로그아웃">⏻ 로그아웃</button></form>
-  <span class="live"><span class="dot bg-done"></span>LIVE</span>
+  <span class="conn" id="conn"><span class="dot"></span>연결 중</span>
 </header>
 
 <div class="body">
   <aside class="left">
-    <label class="search"><span style="color:var(--dim)">⌕</span><input id="q" placeholder="세션 검색"><kbd>/</kbd></label>
+    <label class="search"><span style="color:var(--dim)">⌕</span><input id="q" placeholder="세션 · 에이전트 검색"><kbd>/</kbd></label>
     <div class="list" id="list"></div>
   </aside>
 
@@ -258,12 +269,18 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
     <div class="ctool">
       <div class="seg"><button data-v="graph" class="on">◇ 조직도</button><button data-v="grid">▦ 라이브 그리드</button></div>
       <span class="sp"></span>
-      <span style="font-size:12px;color:var(--dim)"><kbd>G</kbd> 보기 전환 · <kbd>J</kbd><kbd>K</kbd> 세션 이동 · <kbd>1</kbd> 승인 · <kbd>Esc</kbd> 거절</span>
+      <span style="font-size:12px;color:var(--dim)"><kbd>G</kbd> 보기 전환 · <kbd>J</kbd><kbd>K</kbd> 이동 · <kbd>1</kbd> 허용 · <kbd>2</kbd> 항상 허용 · <kbd>Esc</kbd> 거절</span>
     </div>
     <div class="canvas" id="canvas">
       <div class="bgimg"></div><div class="grid3d"></div>
       <div id="stage"></div>
       <div class="lgrid" id="lgrid" hidden></div>
+      <div class="emptyc" id="empty" hidden><div>
+        <b>아직 연결된 Claude 세션이 없어요.</b><br>
+        애수기에서 tmux 안에 Claude 를 띄우면 여기에 바로 나타나요.<br><br>
+        <code>cd ~/project/rtmc-project && tmux new -s rtmc-lead claude</code><br><br>
+        훅은 세션이 첫 동작을 할 때 연결돼요. 띄운 뒤 아무 지시나 한 번 보내 주세요.
+      </div></div>
       <div class="legend" id="legend"><span><span class="eq"><i></i><i></i><i></i></span>작업 중</span><span><span class="dot bg-appr"></span>승인</span><span><span class="dot bg-stall"></span>응답 없음 60초+</span><span style="color:var(--pink)">━▶ 총괄 지시</span></div>
       <div class="zoom" id="zoom"><button id="zi">+</button><button id="zo">−</button><button id="zf">⤢</button></div>
     </div>
@@ -274,8 +291,8 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
     <div class="pbody" id="pbody"></div>
     <div class="compose">
       <div class="cbox">
-        <textarea id="input" placeholder="지시 입력 — 기본은 총괄에게 보내요"></textarea>
-        <div class="crow">받는 세션 <select class="target" id="target"></select><span class="sp"></span><span>Enter 보내기</span><button class="send" id="send">보내기 ➤</button></div>
+        <textarea id="input" placeholder="지시 입력 — 받는 세션의 tmux 창에 그대로 입력돼요"></textarea>
+        <div class="crow">받는 세션 <select class="target" id="target"></select><span class="sp"></span><span>Enter 보내기 · Shift+Enter 줄바꿈</span><button class="send" id="send">보내기 ➤</button></div>
       </div>
       <div class="chint" id="chint"></div>
     </div>
@@ -290,319 +307,328 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 <div class="pal" id="pal"><div class="palbox"><input id="palq" placeholder="세션 열기, 보기 전환, 승인 대기로 이동…"><div class="palist" id="palist"></div></div></div>
 
 <script>
-const T0 = Date.now();
-const now = () => (Date.now() - T0) / 1000;
 const $ = s => document.querySelector(s);
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const mmss = s => { s = Math.max(0, Math.floor(s)); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); };
-const clock = () => new Date().toTimeString().slice(0,8);
-const F = (tool,arg,st='ok',ago=0,out) => ({tool,arg,st,t:-ago,out});
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mmss = ms => { let s = Math.max(0, Math.floor(ms / 1000)); const h = Math.floor(s / 3600); s %= 3600; return (h ? h + ':' : '') + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+const hhmm = t => new Date(t).toTimeString().slice(0, 8);
+const NICK = { pims: '핌스', userweb: '유저웹', vims: '빔스', miranda: '미란다', backend: '백엔드', 'general-purpose': '범용', Explore: '탐색', Plan: '계획' };
+const RO = { backend: 1 };
+const LBL = { run: '작업 중', appr: '승인 필요', stall: '응답 없음', idle: '대기', done: '완료' };
 
-const S = [
-  {id:'lead',nm:'총괄',dir:'rtmc-project',model:'Opus',ctx:44,st:'run',since:-95,last:-2,
-   prompt:'백엔드 /notice pinned 기준으로 유저웹·빔스 공지 목록 맞추고 PR 올려 줘',
-   say:'백엔드 스펙 확인이 끝나서 유저웹·빔스에 나눠 맡겼어요. 유저웹은 테스트 수정 중이고, 빔스가 force push 승인을 기다리고 있어요.',
-   script:[['Agent','userweb · 진행 상황 확인'],['TaskOutput','vims · 승인 대기 확인'],['Read','유저웹 변경 요약'],['Agent','backend · 마이그레이션 날짜 확인']],
-   feed:[F('Agent','backend · GET /notice 스펙 조회','ok',80),F('Agent','userweb · pinned 반영','ok',60),F('Agent','vims · 고정 여부 컬럼','ok',58),F('TaskOutput','하위 작업 결과 수집','run',2)]},
-  {id:'pims',nm:'핌스',dir:'dak-pv-ims-rust',model:'Sonnet',ctx:21,st:'run',since:-240,last:-78,
-   prompt:'web_app 빌드 경고 정리',say:'경고 12건 중 9건 정리했어요. 릴리스 빌드로 확인 중이에요.',script:[],
-   feed:[F('Edit','crates/web_app/src/pages/stock.rs','ok',150),F('Edit','crates/api/src/client.rs','ok',120),F('Bash','cargo build --release -p web_app','run',78)]},
-  {id:'userweb',nm:'유저웹',dir:'dak-user-web',model:'Sonnet',ctx:38,st:'run',since:-62,last:-1,
-   prompt:'[총괄] 공지 목록에 pinned 반영 — 고정 공지 상단 정렬 + 핀 아이콘',
-   say:'notice API 타입에 pinned 를 넣고 고정 공지 우선 정렬을 추가했어요. 정렬 안정성 테스트가 실패해서 createdAt 2차 정렬을 넣고 다시 돌리고 있어요.',
-   script:[['Bash','pnpm --filter dak_notice test'],['Edit','packages/dak_notice/src/ui/NoticeItem.tsx'],['Grep','PinIcon packages/dak-design-system'],['Bash','pnpm --filter dak_notice lint'],['Read','packages/dak_notice/src/hooks/useNoticeList.ts']],
-   feed:[F('Read','packages/dak_notice/src/api/notice.ts','ok',55),F('Edit','packages/dak_notice/src/api/notice.ts','ok',48),F('Edit','packages/dak_notice/src/hooks/useNoticeList.ts','ok',40),F('Bash','pnpm --filter dak_notice test','fail',30,'FAIL useNoticeList.test.ts\n ✕ 같은 pinned 끼리 최신순 유지'),F('Edit','packages/dak_notice/src/hooks/useNoticeList.ts','run',1)],
-   files:[{n:'notice.ts',p:'packages/dak_notice/src/api/',a:1,r:0,d:[['c','export interface Notice {'],['c','  id: number; title: string;'],['a','  pinned: boolean;'],['c','}']]},
-          {n:'useNoticeList.ts',p:'packages/dak_notice/src/hooks/',a:3,r:1,d:[['r','  return data.items;'],['a','  return [...data.items].sort((a, b) =>'],['a','    Number(b.pinned) - Number(a.pinned) ||'],['a','    b.createdAt.localeCompare(a.createdAt));']]},
-          {n:'NoticeItem.tsx',p:'packages/dak_notice/src/ui/',a:2,r:1,d:[['r','  <span>{title}</span>'],['a','  {pinned && <PinIcon size={14} />}'],['a','  <span>{title}</span>']]}]},
-  {id:'vims',nm:'빔스',dir:'dak-vd-ims',model:'Sonnet',ctx:57,st:'appr',since:-70,last:-33,
-   prompt:'[총괄] 관리 공지 목록에 고정 여부 컬럼 추가',say:'컬럼 추가는 끝났어요. 리베이스한 브랜치를 올리려면 force push 가 필요해요.',
-   ap:{tool:'Bash',risk:'원격 브랜치 기록을 덮어써요 (force push)',cmd:'git push --force origin feat/notice-pinned',why:'main 기준으로 리베이스한 브랜치를 다시 올리기'},
-   script:[['Bash','gh pr create --fill --base main'],['Bash','pnpm --filter dak_management build']],limit:2,
-   feed:[F('Edit','packages/dak_management/src/notice/list.tsx','ok',60),F('Bash','git rebase main','ok',40)],
-   files:[{n:'list.tsx',p:'packages/dak_management/src/notice/',a:3,r:0,d:[['c','const columns = ['],['a',"  { key: 'pinned', title: '고정', width: 64,"],['a','    render: v => v ? <PinIcon /> : null },'],['c',"  { key: 'title', title: '제목' },"]]}]},
-  {id:'miranda',nm:'미란다',dir:'miranda',model:'Sonnet',ctx:9,st:'idle',since:0,last:-1020,feed:[],say:''},
-  {id:'backend',nm:'백엔드',dir:'rtmc-api-nest',model:'Haiku',ctx:15,st:'run',ro:true,since:-20,last:-1,
-   prompt:'[총괄] pinned 마이그레이션 날짜 확인 (읽기 전용)',say:'GET /notice → { items:[{ id, title, pinned, createdAt }], total }. pinned 는 9/30 마이그레이션으로 들어온 boolean 이에요. 파일은 수정하지 않았어요.',
-   script:[['Read','src/notice/dto/notice.dto.ts'],['Read','db/migrations/20260930_notice_pinned.sql'],['Grep','pinned src/notice']],limit:3,
-   feed:[F('Grep',"@Get('notice') src/",'ok',18),F('Read','src/notice/notice.controller.ts','run',1)]},
-];
-S.forEach(s => { s.si = 0; s.shown = s.st === 'run' ? Math.floor(s.say.length * .4) : s.say.length; s.files = s.files || []; s.feed.forEach(f => f.t += 0); });
-const msgs = {userweb:3, vims:2, backend:2, pims:1, miranda:0};
-const tree = {sub:{parent:'userweb', nm:'general-purpose', s:'RUN TESTS'}};
-let sel = 'userweb', view = 'graph', tab = 'now', filter = null, log = [], scale = 1, tx = 0, ty = 0;
-const sigs = {};
-
-const g = id => S.find(s => s.id === id);
-const stOf = s => (s.st === 'run' && now() - s.last > 60) ? 'stall' : s.st;
-const LBL = {run:'작업 중', appr:'승인 필요', stall:'응답 없음', idle:'대기', done:'완료'};
-const cur = s => s.feed.length ? s.feed[s.feed.length - 1] : null;
-const syncD = () => `--d:-${((performance.now()) % 2400) / 1000}s`;
+let snap = { now: Date.now(), sessions: [], log: [] }, skew = 0, sel = null, view = 'graph', tab = 'now', filter = null;
+let scale = 1, tx = 0, ty = 0, fitted = false;
+const openFiles = new Set(), prevSt = {};
+const now = () => Date.now() + skew;
+const syncD = () => `--d:-${(performance.now() % 2400) / 1000}s`;
+const stOf = x => !x ? 'idle' : (x.status === 'run' && now() - x.last > 60000) ? 'stall' : x.status;
 const ind = st => st === 'run' ? '<span class="eq"><i></i><i></i><i></i><i></i></span>' : `<span class="dot bg-${st}"></span>`;
-const elapsed = s => { const st = stOf(s); return st === 'run' ? mmss(now() - s.since) : st === 'stall' ? mmss(now() - s.last) : st === 'appr' ? mmss(now() - s.last) : ''; };
 const tIcon = f => f.st === 'run' ? '<span class="spin"></span>' : f.st === 'fail' ? '<span class="fail">✕</span>' : '<span class="ok">✓</span>';
+const sessName = s => /\/rtmc-project\/?$/.test(s.cwd) ? '총괄' : (s.tmux || s.dir || s.id.slice(0, 6));
 
-/* ---------- header + list ---------- */
-function renderHeader() {
-  const c = k => S.filter(s => stOf(s) === k).length;
+/* ---------- 스냅샷 → 화면 항목 ---------- */
+function items() {
+  const out = [];
+  for (const s of snap.sessions) {
+    out.push({ kind: 's', key: 's:' + s.id, sid: s.id, s, x: s, nm: sessName(s), st: stOf(s) });
+    const insts = Object.values(s.agents || {});
+    const types = [...new Set([...(s.known || []), ...insts.map(a => a.type), ...Object.keys(s.dispatch || {})])];
+    for (const ty of types) {
+      const a = insts.filter(i => i.type === ty).sort((p, q) => q.last - p.last)[0] || null;
+      out.push({ kind: 'a', key: `a:${s.id}:${ty}`, sid: s.id, s, x: a, type: ty, nm: NICK[ty] || ty, st: a ? stOf(a) : 'idle', count: (s.dispatch || {})[ty] || 0 });
+    }
+  }
+  return out;
+}
+const byKey = k => items().find(i => i.key === k);
+function elapsed(it) {
+  const x = it.x; if (!x) return '';
+  const st = it.st;
+  if (st === 'run') return mmss(now() - x.since);
+  if (st === 'stall') return mmss(now() - x.last);
+  if (st === 'appr' && x.approval) return mmss(now() - x.approval.since);
+  return '';
+}
+function curLine(it) {
+  const x = it.x, st = it.st;
+  if (!x) return `<span class="arg" style="color:var(--dim)">${RO[it.type] ? '읽기 전용 · ' : ''}호출 대기</span>`;
+  if (st === 'appr' && x.approval) return `<span class="tool t-appr">${esc(x.approval.tool || '승인')}</span><span class="arg" style="color:var(--pink)">${esc(x.approval.cmd || x.approval.msg)}</span>`;
+  if ((st === 'run' || st === 'stall') && x.tool) return `<span class="tool ${st === 'stall' ? 't-stall' : ''}">${esc(x.tool)}</span><span class="arg">${esc(x.arg)}</span>`;
+  if (st === 'run') return `<span class="arg" style="color:var(--cyan)">생각 중…</span>`;
+  return `<span class="arg" style="color:var(--dim)">${st === 'done' ? '완료 · 결과 확인' : '지시 대기 중'}</span>`;
+}
+
+/* ---------- 헤더 · 목록 ---------- */
+function renderHeader(all) {
+  const live = all.filter(i => i.kind === 's' || i.x);
+  const c = k => live.filter(i => i.st === k).length;
   $('#nRun').textContent = c('run'); $('#nAppr').textContent = c('appr'); $('#nStall').textContent = c('stall'); $('#nIdle').textContent = c('idle') + c('done');
   $('#chAppr').classList.toggle('alert', c('appr') > 0);
   document.querySelectorAll('.chip[data-f]').forEach(b => b.classList.toggle('on', filter === b.dataset.f));
   document.title = (c('appr') ? `(${c('appr')}) 승인 · ` : '') + 'JEFF AGENTS';
 }
-function cardHTML(s) {
-  const st = stOf(s), f = cur(s);
-  const toolCls = st === 'appr' ? 't-appr' : st === 'stall' ? 't-stall' : '';
-  const r2 = st === 'appr' ? `<span class="tool t-appr">${s.ap.tool}</span><span class="arg" style="color:var(--pink)">${esc(s.ap.cmd)}</span>`
-    : (st === 'run' || st === 'stall') && f ? `<span class="tool ${toolCls}">${f.tool}</span><span class="arg">${esc(f.arg)}</span>`
-    : `<span class="arg" style="color:var(--dim)">${st === 'done' ? '작업 완료 · 결과 확인 대기' : '지시 대기 중'}</span>`;
-  const tail = st === 'stall' ? `<div class="tail" style="color:var(--orange)">⚠ ${Math.floor(now() - s.last)}초째 출력 없음 — 멈췄는지 확인해 보세요</div>`
-    : st === 'run' ? `<div class="tail caret" data-say="${s.id}" data-tail="1"></div>` : '';
-  return `<div class="sess ${st} ${sel === s.id ? 'sel' : ''} ${st === 'run' ? 'neon-run' : ''}" style="${syncD()}" data-id="${s.id}">
-    <div class="r1"><span class="nm">${s.nm}</span><span class="st c-${st}">${ind(st)}${LBL[st]}</span><span class="timer" data-el="${s.id}" style="${st === 'run' ? '' : 'color:var(--dim);text-shadow:none'}">${elapsed(s)}</span></div>
-    <div class="r2">${r2}</div>${tail}
-    <div class="r3"><span class="tag">${s.model}</span>${s.ro ? '<span class="tag ro">READ-ONLY</span>' : ''}<span class="mono">${s.dir}</span><span class="ctx" title="컨텍스트 ${s.ctx}%"><i style="width:${s.ctx}%"></i></span></div></div>`;
+function card(it) {
+  const st = it.st, x = it.x;
+  const tail = st === 'stall' ? `<div class="tail" style="color:var(--orange)">⚠ ${Math.floor((now() - x.last) / 1000)}초째 출력 없음</div>`
+    : it.kind === 's' && st === 'done' && x.answer ? `<div class="tail">${esc(x.answer.slice(0, 120))}</div>`
+    : it.kind === 'a' && x && st === 'done' && x.result ? `<div class="tail">${esc(x.result.slice(0, 120))}</div>` : '';
+  const meta = it.kind === 's'
+    ? `<span class="tag">${esc((it.s.model || '').replace(/^claude-/, '') || 'claude')}</span><span class="mono">${esc(it.s.tmux || it.s.dir)}</span>`
+    : `<span class="tag">${esc(it.type)}</span>${RO[it.type] ? '<span class="tag ro">READ-ONLY</span>' : ''}${it.count ? `<span style="color:var(--pink)">지시 ${it.count}회</span>` : ''}`;
+  return `<div class="sess ${it.kind === 'a' ? 'child' : ''} ${it.kind === 'a' && !x ? 'ghost' : ''} ${st} ${sel === it.key ? 'sel' : ''} ${st === 'run' ? 'neon-run' : ''}" style="${syncD()}" data-k="${esc(it.key)}">
+    <div class="r1"><span class="nm">${esc(it.nm)}</span><span class="st c-${st}">${ind(st)}${LBL[st]}</span><span class="timer" data-el="${esc(it.key)}" style="${st === 'run' ? '' : 'color:var(--dim);text-shadow:none'}">${elapsed(it)}</span></div>
+    <div class="r2">${curLine(it)}</div>${tail}<div class="r3">${meta}</div></div>`;
 }
-function renderList() {
+function renderList(all) {
   const q = $('#q').value.trim();
-  let arr = S.filter(s => (!filter || stOf(s) === filter || (filter === 'idle' && stOf(s) === 'done')) && (!q || (s.nm + s.dir).includes(q)));
-  const sig = JSON.stringify([arr.map(s => [s.id, stOf(s), cur(s) && cur(s).arg, s.ctx]), sel, q, filter]);
-  if (sigs.list === sig) return; sigs.list = sig;
-  const lead = arr.filter(s => s.id === 'lead'), rest = arr.filter(s => s.id !== 'lead');
-  $('#list').innerHTML = (lead.length ? '<div class="grp-t">COMMAND</div>' + lead.map(cardHTML).join('') : '')
-    + (rest.length ? '<div class="grp-t">REPOS</div>' + rest.map(cardHTML).join('') : '')
-    + (arr.length ? '' : '<div class="empty">조건에 맞는 세션이 없어요</div>');
-  document.querySelectorAll('.sess').forEach(n => n.onclick = () => select(n.dataset.id));
-  typeAll(true);
+  const ok = it => (!filter || it.st === filter || (filter === 'idle' && it.st === 'done')) && (!q || (it.nm + (it.type || '') + (it.s.dir || '')).includes(q));
+  const html = [];
+  for (const it of all.filter(i => i.kind === 's')) {
+    const kids = all.filter(i => i.kind === 'a' && i.sid === it.sid && ok(i));
+    if (!ok(it) && !kids.length) continue;
+    html.push(card(it), ...kids.map(card));
+  }
+  $('#list').innerHTML = html.join('') || `<div class="empty">${snap.sessions.length ? '조건에 맞는 항목이 없어요' : '연결된 세션이 없어요'}</div>`;
+  document.querySelectorAll('.sess').forEach(n => n.onclick = () => select(n.dataset.k));
 }
 
-/* ---------- graph ---------- */
-const W = 900, H = 770;
-const P = {host:[450,40], cc:[450,160], rtmc:[450,290], vg:[770,290], lead:[450,420], pims:[90,600], userweb:[270,600], vims:[450,600], miranda:[630,600], backend:[810,600], sub:[270,715]};
+/* ---------- 조직도 ---------- */
+let W = 900, H = 560, P = {};
+function layout(all) {
+  const ss = all.filter(i => i.kind === 's');
+  const col = 178;
+  let x = 90; P = {};
+  for (const s of ss) {
+    const kids = all.filter(i => i.kind === 'a' && i.sid === s.sid);
+    const n = Math.max(1, kids.length);
+    kids.forEach((k, j) => P[k.key] = [x + j * col, 450]);
+    P[s.key] = [x + (n - 1) * col / 2, 300];
+    x += n * col + 40;
+  }
+  W = Math.max(720, x + 50 - 40); H = 540;
+  P.host = [W / 2, 40]; P.cc = [W / 2, 160];
+}
 function path(a, b) { const [x1, y1] = [P[a][0], P[a][1] + 28], [x2, y2] = [P[b][0], P[b][1] - 28], my = (y1 + y2) / 2; return `M${x1} ${y1} C${x1} ${my},${x2} ${my},${x2} ${y2}`; }
-function edge(a, b, st, opt = {}) {
+function edge(a, b, st, msg) {
   const d = path(a, b);
-  const col = opt.msg ? 'var(--pink)' : st === 'run' ? 'var(--cyan)' : st === 'appr' ? 'var(--hot)' : st === 'stall' ? 'var(--orange)' : '#4d3f78';
-  const live = st === 'run' || opt.msg;
-  let s = `<path d="${d}" fill="none" stroke="${col}" stroke-width="${opt.msg ? 2 : 1.4}" stroke-dasharray="${opt.msg ? '0' : '4 6'}" ${live && !opt.msg ? 'class="flow"' : ''} ${opt.msg ? 'marker-end="url(#ar)" style="filter:drop-shadow(0 0 4px rgba(255,46,151,.7))"' : ''}/>`;
-  if (opt.msg && st === 'run') s += `<circle r="4" fill="#fff" style="filter:drop-shadow(0 0 5px #ff7edb)"><animateMotion dur="1.4s" repeatCount="indefinite" path="${d}"/></circle>`;
+  const col = msg ? 'var(--pink)' : st === 'run' ? 'var(--cyan)' : st === 'appr' ? 'var(--hot)' : st === 'stall' ? 'var(--orange)' : '#4d3f78';
+  let s = `<path d="${d}" fill="none" stroke="${col}" stroke-width="${msg ? 2 : 1.4}" stroke-dasharray="${msg ? '0' : '4 6'}" ${st === 'run' && !msg ? 'class="flow"' : ''} ${msg ? 'marker-end="url(#ar)" style="filter:drop-shadow(0 0 4px rgba(255,46,151,.7))"' : ''}/>`;
+  if (msg && st === 'run') s += `<circle r="4" fill="#fff" style="filter:drop-shadow(0 0 5px #ff7edb)"><animateMotion dur="1.4s" repeatCount="indefinite" path="${d}"/></circle>`;
   return s;
 }
-function renderGraph() {
-  const sig = JSON.stringify([S.map(s => [stOf(s), cur(s) && cur(s).tool]), msgs, sel, view]);
-  if (sigs.graph === sig || view !== 'graph') return; sigs.graph = sig;
-  const anyRun = S.some(s => stOf(s) === 'run'), anyAppr = S.some(s => stOf(s) === 'appr');
-  const grpSt = anyAppr ? 'appr' : anyRun ? 'run' : 'idle';
+function renderGraph(all) {
+  if (view !== 'graph') return;
+  layout(all);
+  const ss = all.filter(i => i.kind === 's');
+  const any = k => all.some(i => i.st === k);
   let e = `<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#ff7edb"/></marker></defs>`;
-  e += edge('host', 'cc', anyRun ? 'run' : 'idle') + edge('cc', 'rtmc', grpSt) + edge('cc', 'vg', 'idle') + edge('rtmc', 'lead', stOf(g('lead')));
-  for (const s of S.slice(1)) e += edge('lead', s.id, stOf(s), {msg: !!msgs[s.id]});
-  const ps = g(tree.sub.parent); if (stOf(ps) === 'run') e += edge(ps.id, 'sub', 'run');
-  const node = (id, t, s, cls, extra = '') => `<div class="node ${cls}" data-id="${id}" style="left:${P[id][0]}px;top:${P[id][1]}px;${extra}"><div class="t">${t}</div><div class="s">${s}</div></div>`;
-  let h = node('host', '애수기', 'local host', 'grp') + node('cc', 'Claude Code', 'AGENT CLI', 'grp') + node('rtmc', 'rtmc-project', 'PROJECT · 세션 6', 'grp') + node('vg', 'dak-very-good', '별도 프로젝트', 'grp off');
-  for (const s of S) {
-    const st = stOf(s), f = cur(s);
-    const sub = st === 'run' && f ? `${f.tool} · ${mmss(now() - s.since)}` : st === 'stall' ? `응답 없음 ${Math.floor(now() - s.last)}s` : st === 'appr' ? '승인 필요 · ' + s.ap.tool : LBL[st] + (s.ro ? ' · READ-ONLY' : '');
-    h += node(s.id, (st === 'run' ? '<span class="eq"><i></i><i></i><i></i></span>' : '') + s.nm, `<span data-ns="${s.id}">${sub}</span>`, `${st} ${st === 'run' ? 'neon-run' : ''} ${sel === s.id ? 'sel' : ''}`, syncD());
+  e += edge('host', 'cc', any('run') ? 'run' : 'idle');
+  for (const s of ss) e += edge('cc', s.key, s.st);
+  for (const a of all.filter(i => i.kind === 'a')) e += edge(a.s && ('s:' + a.sid), a.key, a.st, a.count > 0);
+  const node = (key, t, sub, cls) => `<div class="node ${cls} ${sel === key ? 'sel' : ''}" data-k="${esc(key)}" style="left:${P[key][0]}px;top:${P[key][1]}px;${syncD()}"><div class="t">${t}</div><div class="s">${sub}</div></div>`;
+  let h = node('host', '애수기', 'SERVER', 'grp') + node('cc', 'Claude Code', `AGENT CLI · 세션 ${ss.length}`, 'grp');
+  for (const it of all) {
+    const st = it.st, x = it.x;
+    const sub = st === 'run' && x?.tool ? `${esc(x.tool)} · <span data-el="${esc(it.key)}">${elapsed(it)}</span>` : st === 'run' ? `생각 중 · <span data-el="${esc(it.key)}">${elapsed(it)}</span>` : st === 'stall' ? `응답 없음 ${Math.floor((now() - x.last) / 1000)}s` : st === 'appr' ? '승인 필요' : (LBL[st] + (RO[it.type] ? ' · READ-ONLY' : ''));
+    h += node(it.key, (st === 'run' ? '<span class="eq"><i></i><i></i><i></i></span>' : '') + esc(it.nm), sub, `${st} ${st === 'run' ? 'neon-run' : ''} ${it.kind === 'a' && !x ? 'grp' : ''}`);
   }
-  if (stOf(ps) === 'run') h += node('sub', tree.sub.nm, tree.sub.s, 'sub run neon-run', syncD());
   let badges = '';
-  for (const s of S.slice(1)) if (msgs[s.id]) { const x = (P.lead[0] + P[s.id][0]) / 2, y = (P.lead[1] + P[s.id][1]) / 2; badges += `<div class="badge" style="left:${x}px;top:${y}px">→${msgs[s.id]}</div>`; }
-  const st = $('#stage'); st.style.width = W + 'px'; st.style.height = H + 'px';
-  st.innerHTML = `<svg width="${W}" height="${H}" style="position:absolute;inset:0;overflow:visible">${e}</svg>${h}${badges}`;
-  st.querySelectorAll('.node').forEach(n => n.onclick = ev => { ev.stopPropagation(); if (g(n.dataset.id)) select(n.dataset.id); });
+  for (const a of all.filter(i => i.kind === 'a' && i.count)) { const p = P['s:' + a.sid], q = P[a.key]; badges += `<div class="badge" style="left:${(p[0] + q[0]) / 2}px;top:${(p[1] + q[1]) / 2}px">→${a.count}</div>`; }
+  const stg = $('#stage'); stg.style.width = W + 'px'; stg.style.height = H + 'px';
+  stg.innerHTML = `<svg width="${W}" height="${H}" style="position:absolute;inset:0;overflow:visible">${e}</svg>${h}${badges}`;
+  stg.querySelectorAll('.node[data-k]').forEach(n => n.onclick = ev => { ev.stopPropagation(); if (n.dataset.k.includes(':')) select(n.dataset.k); });
+  if (!fitted) { fit(); fitted = true; }
 }
 
-/* ---------- live grid ---------- */
-function renderGrid() {
-  const sig = JSON.stringify([S.map(s => [stOf(s), s.feed.length, cur(s) && cur(s).st]), sel, view]);
-  if (sigs.grid === sig || view !== 'grid') return; sigs.grid = sig;
-  $('#lgrid').innerHTML = S.map(s => {
-    const st = stOf(s);
-    const lines = s.feed.slice(-6).map(f => `<div class="ln">${tIcon(f)}<span style="color:var(--yellow);flex:none">${f.tool}</span><span class="a">${esc(f.arg)}</span></div>`).join('') || '<div class="ln" style="color:var(--dim)">아직 기록 없음</div>';
-    const bar = st === 'stall' ? `<div class="warnbar">⚠ ${Math.floor(now() - s.last)}초째 출력 없음 · <button class="pbtn" style="height:22px" data-nudge="${s.id}">상태 물어보기</button></div>`
-      : st === 'appr' ? `<div class="apbar">⏸ 승인 대기 — <span class="mono">${esc(s.ap.cmd)}</span></div>` : '';
-    return `<div class="tile ${st} ${sel === s.id ? 'sel' : ''} ${st === 'run' ? 'neon-run' : ''}" style="${syncD()}" data-id="${s.id}">
-      <div class="th"><span class="nm">${s.nm}</span><span class="tag">${s.model}</span>${s.ro ? '<span class="tag ro">RO</span>' : ''}<span class="st c-${st}">${ind(st)}${LBL[st]}</span><span class="timer" data-el="${s.id}">${elapsed(s)}</span></div>
-      ${bar}<div class="tb">${lines}</div>
-      <div class="say ${st === 'run' ? 'caret' : ''}" data-say="${s.id}">${st === 'run' ? '' : esc(s.say || '—')}</div></div>`;
-  }).join('');
-  document.querySelectorAll('.tile').forEach(n => n.onclick = e => { if (e.target.dataset.nudge) { nudge(e.target.dataset.nudge); e.stopPropagation(); return; } select(n.dataset.id); });
-  typeAll(true);
+/* ---------- 라이브 그리드 ---------- */
+function renderGrid(all) {
+  if (view !== 'grid') return;
+  $('#lgrid').innerHTML = all.filter(i => i.kind === 's' || i.x).map(it => {
+    const st = it.st, x = it.x;
+    const lines = (x.feed || []).slice(-7).map(f => `<div class="ln">${tIcon(f)}<span style="color:var(--yellow);flex:none">${esc(f.tool)}</span><span class="a">${esc(f.arg)}</span></div>`).join('') || '<div class="ln" style="color:var(--dim)">아직 기록 없음</div>';
+    const bar = st === 'stall' ? `<div class="warnbar">⚠ ${Math.floor((now() - x.last) / 1000)}초째 출력 없음</div>` : st === 'appr' && x.approval ? `<div class="apbar">⏸ 승인 대기 — <span class="mono">${esc(x.approval.cmd || x.approval.msg)}</span></div>` : '';
+    const say = it.kind === 's' ? (st === 'run' ? '' : x.answer) : x.result;
+    return `<div class="tile ${st} ${sel === it.key ? 'sel' : ''} ${st === 'run' ? 'neon-run' : ''}" style="${syncD()}" data-k="${esc(it.key)}">
+      <div class="th"><span class="nm">${esc(it.nm)}</span>${it.kind === 'a' ? `<span class="tag">${esc(it.type)}</span>` : ''}${RO[it.type] ? '<span class="tag ro">RO</span>' : ''}<span class="st c-${st}">${ind(st)}${LBL[st]}</span><span class="timer" data-el="${esc(it.key)}">${elapsed(it)}</span></div>
+      ${bar}<div class="tb">${lines}</div><div class="say ${st === 'run' ? 'caret' : ''}">${esc((say || (st === 'run' ? (x.tool ? x.tool + ' · ' + x.arg : '생각 중') : '—')).slice(0, 220))}</div></div>`;
+  }).join('') || '';
+  document.querySelectorAll('.tile').forEach(n => n.onclick = () => select(n.dataset.k));
 }
 
-/* ---------- panel ---------- */
-function renderPanel() {
-  const s = g(sel), st = stOf(s), f = cur(s);
-  const sig = JSON.stringify([sel, tab, st, s.feed.length, f && f.st, s.files.length, s.prompt]);
-  if (sigs.panel === sig) return; sigs.panel = sig;
-  const fa = s.files.reduce((t, x) => t + x.a, 0), fr = s.files.reduce((t, x) => t + x.r, 0);
-  const cmds = s.feed.filter(x => x.tool === 'Bash');
-  $('#ph').innerHTML = `<div class="r1"><span class="title">${s.nm}</span>
-      <span class="bigst ${st}">${ind(st)}${LBL[st]}${st === 'run' && f ? ` · ${f.tool}` : ''}<span class="mono" data-el="${s.id}">${elapsed(s)}</span></span>
-      <span class="sp"></span>${st === 'run' || st === 'stall' ? '<button class="pbtn stop" id="stopBtn">■ 멈추기</button>' : ''}
-      <button class="pbtn" title="VS Code 로 열기">⧉ 폴더</button></div>
-    <div class="pmeta"><span class="tag">${s.model}</span>${s.ro ? '<span class="tag ro">READ-ONLY · 수정·커밋 차단</span>' : ''}<span class="mono">~/project/rtmc-project/${s.id === 'lead' ? '' : s.dir}</span><span>· 컨텍스트 ${s.ctx}%</span></div>
-    <div class="tabs"><button data-t="now" class="${tab === 'now' ? 'on' : ''}">지금</button><button data-t="files" class="${tab === 'files' ? 'on' : ''}">변경 파일<em>${s.files.length} · <span class="plus">+${fa}</span> <span class="minus">−${fr}</span></em></button><button data-t="cmds" class="${tab === 'cmds' ? 'on' : ''}">명령<em>${cmds.length}</em></button><button data-t="hist" class="${tab === 'hist' ? 'on' : ''}">기록</button></div>`;
+/* ---------- 오른쪽 패널 ---------- */
+function renderPanel(all) {
+  const it = all.find(i => i.key === sel) || all[0];
+  if (!it) { $('#ph').innerHTML = ''; $('#pbody').innerHTML = '<div class="empty">세션이 연결되면 여기서 보고 지시할 수 있어요.</div>'; $('#chint').textContent = ''; return; }
+  sel = it.key;
+  const st = it.st, x = it.x, s = it.s;
+  const files = x?.files || [], cmds = (x?.feed || []).filter(f => f.tool === 'Bash');
+  const fa = files.reduce((t, f) => t + f.a, 0), fr = files.reduce((t, f) => t + f.r, 0);
+  const canStop = it.kind === 's' && (st === 'run' || st === 'stall');
+  $('#ph').innerHTML = `<div class="r1"><span class="title">${esc(it.nm)}</span>
+      <span class="bigst ${st}">${ind(st)}${LBL[st]}${st === 'run' && x?.tool ? ` · ${esc(x.tool)}` : ''}<span class="mono" data-el="${esc(it.key)}">${elapsed(it)}</span></span>
+      <span class="sp"></span>${canStop ? '<button class="pbtn stop" id="stopBtn">■ 멈추기 (Esc)</button>' : ''}</div>
+    <div class="pmeta">${it.kind === 's'
+      ? `<span class="tag">${esc((s.model || 'claude').replace(/^claude-/, ''))}</span><span class="tag">${esc(s.mode || '')}</span><span class="mono">${esc(s.cwd)}</span><span>· tmux ${esc(s.tmux || '?')} ${esc(s.pane)}</span>`
+      : `<span class="tag">${esc(it.type)}</span>${RO[it.type] ? '<span class="tag ro">READ-ONLY · 수정·커밋 차단</span>' : ''}<span>· ${esc(sessName(s))} 세션의 서브에이전트</span>${it.count ? `<span style="color:var(--pink)">· 지시 ${it.count}회</span>` : ''}`}</div>
+    <div class="tabs"><button data-t="now" class="${tab === 'now' ? 'on' : ''}">지금</button><button data-t="files" class="${tab === 'files' ? 'on' : ''}">변경 파일<em>${files.length} · <span class="plus">+${fa}</span> <span class="minus">−${fr}</span></em></button><button data-t="cmds" class="${tab === 'cmds' ? 'on' : ''}">명령<em>${cmds.length}</em></button></div>`;
   let h = '';
-  if (tab === 'now') {
-    if (s.prompt) h += `<div class="bubble"><small>${s.prompt.startsWith('[총괄]') ? '총괄 → ' + s.nm : '나 → ' + s.nm}</small>${esc(s.prompt.replace('[총괄] ', ''))}</div>`;
-    if (st === 'appr') h += `<div class="approve"><h3>⏸ 승인 요청 · ${s.ap.tool}</h3>
-        <div class="risk">⚠ 위험 · ${esc(s.ap.risk)}</div><div class="apcmd mono">${esc(s.ap.cmd)}</div><div class="apwhy">이유: ${esc(s.ap.why)}</div>
-        <div class="apbtns"><button class="yes" data-ap="yes"><kbd>1</kbd> 허용</button><button data-ap="always"><kbd>2</kbd> 이 세션에서 항상 허용</button><button class="no" data-ap="no"><kbd>Esc</kbd> 거절하고 다르게 하라고 하기</button></div>
-        <input class="apfb" id="apfb" placeholder="거절 이유 (Claude 에게 함께 전달돼요) — 예: force push 말고 새 브랜치로"></div>`;
-    if (st === 'stall') h += `<div class="approve" style="border-color:var(--orange);background:rgba(255,139,57,.07);box-shadow:none"><h3 style="color:var(--orange);text-shadow:none">⚠ ${Math.floor(now() - s.last)}초째 출력이 없어요</h3><div class="apwhy">마지막 도구: <span class="mono" style="color:var(--yellow)">${esc(f.tool)} · ${esc(f.arg)}</span><br>릴리스 빌드처럼 오래 걸리는 작업일 수도 있어요.</div>
-        <div class="apbtns"><button class="yes" data-nudge="${s.id}">상태 물어보기</button><button data-stop="1">멈추기</button></div></div>`;
-    if (s.say) h += `<div class="answer ${st === 'run' ? 'neon-run' : ''}" style="${syncD()}"><div class="ah2"><span class="lbl">CLAUDE</span>${st === 'run' ? '<span class="spin"></span> 답변 작성 중' : st === 'done' ? '<span class="ok">✓</span> 완료' : ''}</div><div class="atext ${st === 'run' ? 'caret' : ''}" data-say="${s.id}">${st === 'run' ? '' : esc(s.say)}</div></div>`;
-    if (s.feed.length) h += `<div class="stream">${s.feed.slice(-8).map((x, i, a) => `<div class="ln ${x.st === 'run' ? 'cur' : ''}"><time>+${mmss(x.t - s.since)}</time>${tIcon(x)}<span class="tl">${x.tool}</span><span class="a" style="color:${x.st === 'run' ? 'var(--text)' : 'var(--sub)'}">${esc(x.arg)}</span></div>`).join('')}</div>`;
-    if (!h) h = `<div class="empty">대기 중인 세션이에요.<br>아래 입력창에서 바로 지시하거나 총괄에게 맡기세요.</div>`;
+  if (!x) h = `<div class="empty">아직 호출되지 않았어요.<br>총괄에게 "${esc(it.nm)}에게 …" 처럼 지시하면 여기서 진행이 보여요.</div>`;
+  else if (tab === 'now') {
+    const ask = it.kind === 's' ? x.prompt : x.task;
+    if (ask) h += `<div class="bubble"><small>${it.kind === 's' ? '나 → ' + esc(it.nm) : esc(sessName(s)) + ' → ' + esc(it.nm)}</small>${esc(ask.slice(0, 1500))}</div>`;
+    if (st === 'appr' && x.approval) {
+      const a = x.approval;
+      h += `<div class="approve"><h3>⏸ 승인 요청${a.tool ? ' · ' + esc(a.tool) : ''}</h3>
+        ${a.cmd ? `<div class="apcmd mono" style="margin-top:12px">${esc(a.cmd)}</div>` : ''}${a.why ? `<div class="apwhy">이유: ${esc(a.why)}</div>` : ''}
+        ${a.screen ? `<div class="term">${esc(a.screen)}</div>` : `<div class="apwhy">${esc(a.msg)}</div>`}
+        <div class="apbtns"><button class="yes" data-ap="yes"><kbd>1</kbd> 허용</button><button data-ap="always"><kbd>2</kbd> 다시 묻지 않기</button><button class="no" data-ap="no"><kbd>Esc</kbd> 거절${'' }</button></div>
+        <input class="apfb" id="apfb" placeholder="거절 이유 (적으면 거절 뒤 Claude 에게 그대로 전달돼요)"></div>`;
+    }
+    if (st === 'stall') h += `<div class="approve" style="border-color:var(--orange);background:rgba(255,139,57,.07);box-shadow:none"><h3 style="color:var(--orange);text-shadow:none">⚠ ${Math.floor((now() - x.last) / 1000)}초째 새 이벤트가 없어요</h3><div class="apwhy">마지막 도구: <span class="mono" style="color:var(--yellow)">${esc(x.tool)} · ${esc(x.arg)}</span><br>오래 걸리는 빌드·테스트일 수도 있어요. 멈추려면 위 ■ 멈추기.</div></div>`;
+    if (st === 'run') h += `<div class="livebox neon-run" style="${syncD()}"><span class="spin"></span><b>${x.tool ? esc(x.tool) : '생각 중'}</b><span class="mono">${esc(x.arg || '')}</span></div>`;
+    const ans = it.kind === 's' ? x.answer : x.result;
+    if (ans) h += `<div class="answer"><div class="ah2"><span class="lbl">CLAUDE</span>${st === 'done' ? '<span class="ok">✓</span> 완료' : '마지막 답변'}</div><div class="atext">${esc(ans)}</div></div>`;
+    if ((x.feed || []).length) h += `<div class="stream">${x.feed.slice(-14).map(f => `<div class="ln ${f.st === 'run' ? 'cur' : ''}"><time>${hhmm(f.t)}</time>${tIcon(f)}<span class="tl">${esc(f.tool)}</span><span class="a" style="color:${f.st === 'run' ? 'var(--text)' : 'var(--sub)'}">${esc(f.arg)}</span></div>`).join('')}</div>`;
+    if (!h) h = '<div class="empty">대기 중이에요.</div>';
   } else if (tab === 'files') {
-    h = s.files.length ? s.files.map((x, i) => `<div class="file ${i === 0 ? 'open' : ''}"><div class="fh"><span style="color:var(--dim)">▸</span><span class="mono">${x.n}</span><span class="path mono">${x.p}</span><span class="mono"><span class="plus">+${x.a}</span> <span class="minus">−${x.r}</span></span></div><div class="diff">${x.d.map(([k, t]) => `<div class="${k}">${k === 'a' ? '+ ' : k === 'r' ? '- ' : '  '}${esc(t)}</div>`).join('')}</div></div>`).join('') : '<div class="empty">이번 요청에서 바꾼 파일이 없어요' + (s.ro ? ' (읽기 전용)' : '') + '</div>';
-  } else if (tab === 'cmds') {
-    h = cmds.length ? cmds.slice().reverse().map(x => `<div class="cmd ${x.st === 'fail' ? 'fail' : ''}"><div class="top">${tIcon(x)}<span>${x.st === 'run' ? '실행 중' : x.st === 'fail' ? '실패' : '성공'}</span></div><pre class="mono">$ ${esc(x.arg)}</pre>${x.out ? `<div class="out mono">${esc(x.out)}</div>` : ''}</div>`).join('') : '<div class="empty">실행한 명령이 없어요</div>';
-  } else h = `<div class="empty">지난 요청 기록 (샘플에서는 비어 있어요)</div>`;
-  $('#pbody').innerHTML = h;
-  $('#ph').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; renderPanel(); });
-  $('#pbody').querySelectorAll('.file .fh').forEach(b => b.onclick = () => b.parentNode.classList.toggle('open'));
-  $('#pbody').querySelectorAll('[data-ap]').forEach(b => b.onclick = () => decide(b.dataset.ap));
-  $('#pbody').querySelectorAll('[data-nudge]').forEach(b => b.onclick = () => nudge(b.dataset.nudge));
-  document.querySelectorAll('#stopBtn,[data-stop]').forEach(b => b.onclick = () => stop(sel));
-  $('#chint').innerHTML = st === 'appr' ? '⏸ 승인을 기다리는 중이에요. 위에서 먼저 허용/거절하세요.' : st === 'run' ? '작업 중이에요. 보내면 지금 일을 마친 뒤 이어서 처리해요.' : s.ro ? '읽기 전용 세션 — 조회 지시만 보내세요.' : '';
-  typeAll(true);
-}
-function renderTarget() {
-  const t = $('#target'), v = t.value;
-  t.innerHTML = S.map(s => `<option value="${s.id}">${s.id === 'lead' ? '총괄 (기본)' : s.nm}</option>`).join('');
-  t.value = v || 'lead';
+    h = files.length ? files.map(f => `<div class="file ${openFiles.has(f.path) ? 'open' : ''}" data-p="${esc(f.path)}"><div class="fh"><span style="color:var(--dim)">▸</span><span class="mono">${esc(f.path.split('/').pop())}</span><span class="path mono">${esc(f.path)}</span><span class="mono"><span class="plus">+${f.a}</span> <span class="minus">−${f.r}</span></span></div><div class="diff">${f.diff.map(([k, t]) => `<div class="${k}">${k === 'a' ? '+ ' : k === 'r' ? '- ' : '  '}${esc(t)}</div>`).join('')}</div></div>`).join('') : `<div class="empty">이번 지시에서 바꾼 파일이 없어요${RO[it.type] ? ' (읽기 전용)' : ''}</div>`;
+  } else {
+    h = cmds.length ? cmds.slice().reverse().map(c => `<div class="cmd ${c.st === 'fail' ? 'fail' : ''}"><div class="top">${tIcon(c)}<span>${c.st === 'run' ? '실행 중' : c.st === 'fail' ? '중단됨' : '끝남'}</span><span class="sp"></span><span>${hhmm(c.t)}${c.ms ? ` · ${(c.ms / 1000).toFixed(1)}s` : ''}</span></div><pre class="mono">$ ${esc(c.arg)}</pre>${c.out ? `<div class="out mono">${esc(c.out)}</div>` : ''}</div>`).join('') : '<div class="empty">실행한 명령이 없어요</div>';
+  }
+  const pb = $('#pbody'), keep = pb.dataset.k === sel + tab ? pb.scrollTop : 0;
+  const fb = $('#apfb') ? $('#apfb').value : '';
+  pb.innerHTML = h; pb.dataset.k = sel + tab; pb.scrollTop = keep;
+  if ($('#apfb')) $('#apfb').value = fb;
+  $('#ph').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
+  pb.querySelectorAll('.file .fh').forEach(b => b.onclick = () => { const p = b.parentNode.dataset.p; openFiles.has(p) ? openFiles.delete(p) : openFiles.add(p); b.parentNode.classList.toggle('open'); });
+  pb.querySelectorAll('[data-ap]').forEach(b => b.onclick = () => decide(b.dataset.ap));
+  const sb = $('#stopBtn'); if (sb) sb.onclick = () => act('/api/stop', { session: it.sid });
+  // 받는 세션
+  const t = $('#target'), cur = t.value;
+  t.innerHTML = snap.sessions.map(z => `<option value="${esc(z.id)}">${esc(sessName(z))}${z.tmux ? ' · ' + esc(z.tmux) : ''}</option>`).join('');
+  t.value = t.dataset.manual && snap.sessions.some(z => z.id === cur) ? cur : it.sid;
+  $('#chint').innerHTML = it.kind === 'a' ? `${esc(it.nm)}는 서브에이전트라 직접 입력할 수 없어요. 보내면 <b>${esc(sessName(s))}</b>에게 "${esc(it.nm)}(${esc(it.type)}) 에이전트에게:" 를 붙여 전달해요.`
+    : st === 'appr' ? '⏸ 승인을 기다리는 중이에요. 위에서 먼저 허용/거절하세요.' : st === 'run' ? '작업 중이에요. 보내면 Claude 가 지금 일을 마친 뒤 이어서 처리해요.' : '';
 }
 function renderLog() {
-  $('#alist').innerHTML = log.slice().reverse().map(l => `<div><time>${l[0]}</time><span>${l[1]}</span></div>`).join('');
-  $('#alast').innerHTML = log.length ? `<span class="mono" style="color:var(--dim)">${log[log.length - 1][0]}</span> &nbsp;${log[log.length - 1][1]}` : '';
+  const nm = id => { const s = snap.sessions.find(z => z.id === id); return s ? sessName(s) : ''; };
+  const L = snap.log || [];
+  $('#alist').innerHTML = L.slice().reverse().map(l => `<div><time>${hhmm(l.t)}</time><span><b>${esc(nm(l.sid))}</b> ${esc(l.text)}</span></div>`).join('');
+  const last = L[L.length - 1];
+  $('#alast').innerHTML = last ? `<span class="mono" style="color:var(--dim)">${hhmm(last.t)}</span> &nbsp;<b>${esc(nm(last.sid))}</b> ${esc(last.text)}` : '';
 }
-function render() { renderHeader(); renderList(); renderGraph(); renderGrid(); renderPanel(); renderLog(); }
+function render() {
+  const all = items();
+  if (sel && !all.some(i => i.key === sel)) sel = null;
+  if (!sel && all.length) sel = all[0].key;
+  $('#empty').hidden = snap.sessions.length > 0;
+  renderHeader(all); renderList(all); renderGraph(all); renderGrid(all); renderPanel(all); renderLog();
+}
 
-/* ---------- live updates ---------- */
-function typeAll(force) {
-  document.querySelectorAll('[data-say]').forEach(el => {
-    const s = g(el.dataset.say); if (!s || stOf(s) !== 'run') return;
-    const txt = s.say.slice(0, s.shown);
-    el.textContent = el.dataset.tail ? (txt.length > 70 ? '…' + txt.slice(-70) : txt) : txt;
-  });
-}
-setInterval(() => { let ch = false; S.forEach(s => { if (stOf(s) === 'run' && s.shown < s.say.length) { s.shown++; ch = true; } }); if (ch) typeAll(); }, 45);
-setInterval(() => {
-  document.querySelectorAll('[data-el]').forEach(el => el.textContent = elapsed(g(el.dataset.el)));
-  document.querySelectorAll('[data-ns]').forEach(el => { const s = g(el.dataset.ns), f = cur(s); if (stOf(s) === 'run' && f) el.textContent = `${f.tool} · ${mmss(now() - s.since)}`; });
-  render();
-}, 1000);
-setInterval(() => {
-  for (const s of S) {
-    if (s.st !== 'run' || !s.script || !s.script.length || stOf(s) === 'stall') continue;
-    if (Math.random() < .4) continue;
-    const c = cur(s); if (c && c.st === 'run') c.st = 'ok';
-    if (s.limit && s.si >= s.limit) { finish(s); continue; }
-    const [tool, arg] = s.script[s.si++ % s.script.length];
-    s.feed.push({tool, arg, st:'run', t:now()}); s.last = now(); s.ctx = Math.min(95, s.ctx + 1);
+/* ---------- 서버 연결 ---------- */
+function apply(d) {
+  skew = d.now - Date.now(); snap = d;
+  for (const it of items()) {
+    const was = prevSt[it.key], st = it.st;
+    if (was && was !== st) {
+      if (st === 'appr') toast('appr', `⏸ ${it.nm} 승인 필요`, it.x?.approval?.cmd || it.x?.approval?.msg || '', it.key);
+      if (st === 'done' && was !== 'idle') toast('done', `✓ ${it.nm} 완료`, ((it.kind === 's' ? it.x.answer : it.x.result) || '').slice(0, 80), it.key);
+    }
+    prevSt[it.key] = st;
   }
   render();
-}, 1700);
-
-function L(t) { log.push([clock(), t]); if (log.length > 60) log.shift(); }
-function toast(kind, title, body, id) {
-  const el = document.createElement('div'); el.className = 'toast ' + kind; el.innerHTML = `<b>${title}</b><span>${body}</span>`;
-  el.onclick = () => { if (id) select(id); el.remove(); };
-  $('#toasts').appendChild(el); setTimeout(() => el.remove(), 5000);
 }
-function finish(s) {
-  const c = cur(s); if (c && c.st === 'run') c.st = 'ok';
-  s.st = 'done'; s.shown = s.say.length; s.last = now();
-  L(`<b>${s.nm}</b> 완료`); toast('done', `✓ ${s.nm} 완료`, s.say.slice(0, 60) + '…', s.id);
+function connect() {
+  const es = new EventSource('/events');
+  es.onopen = () => { $('#conn').className = 'conn ok'; $('#conn').innerHTML = '<span class="dot bg-done"></span>LIVE'; };
+  es.onmessage = e => { try { apply(JSON.parse(e.data)); } catch {} };
+  es.onerror = async () => {
+    $('#conn').className = 'conn bad'; $('#conn').innerHTML = '<span class="dot" style="background:var(--red)"></span>끊김 · 재연결 중';
+    const r = await fetch('/api/state', { cache: 'no-store' }).catch(() => null);
+    if (r && r.status === 401) location.href = '/login';
+  };
+}
+async function act(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+  if (!r) return toast('appr', '전송 실패', '서버에 닿지 않았어요'), false;
+  if (r.status === 401) return location.href = '/login', false;
+  if (!r.ok) { const j = await r.json().catch(() => ({})); toast('appr', '실패', j.error || r.status); return false; }
+  return true;
 }
 function decide(k) {
-  const s = g(sel); if (stOf(s) !== 'appr') return;
-  if (k === 'no') {
-    const fb = ($('#apfb') && $('#apfb').value.trim()) || 'force push 하지 말고 새 브랜치로 올려 줘';
-    s.st = 'run'; s.since = now(); s.last = now(); s.prompt = fb; s.say = '알겠어요. force push 대신 feat/notice-pinned-2 브랜치로 올리고 PR 을 열게요.'; s.shown = 0;
-    s.feed.push({tool:'Bash', arg:'git push origin HEAD:feat/notice-pinned-2', st:'run', t:now()});
-    L(`<b>${s.nm}</b> 거절 → “${esc(fb)}”`);
-  } else {
-    s.st = 'run'; s.since = now(); s.last = now(); s.say = '브랜치를 다시 올렸어요. 이제 PR 을 열고 빌드를 확인할게요.'; s.shown = 0;
-    s.feed.push({tool:'Bash', arg:s.ap.cmd, st:'run', t:now()});
-    L(`<b>${s.nm}</b> ${k === 'always' ? '항상 허용' : '허용'}: <span class="mono">${esc(s.ap.cmd)}</span>`);
-  }
-  render();
+  const it = byKey(sel); if (!it) return;
+  const s = it.s; if (stOf(s) !== 'appr') return;
+  act('/api/approve', { session: s.id, choice: k, reason: k === 'no' ? ($('#apfb')?.value.trim() || '') : '' });
 }
-function nudge(id) { const s = g(id); s.last = now(); s.feed.push({tool:'Bash', arg:'(빌드 진행 중 · 312/488 crates)', st:'run', t:now()}); L(`<b>${s.nm}</b>에 상태 확인 → 빌드 진행 중`); toast('', `${s.nm} 응답`, '릴리스 빌드 진행 중이에요 (312/488).', id); render(); }
-function stop(id) { const s = g(id), c = cur(s); if (c && c.st === 'run') c.st = 'fail'; s.st = 'idle'; s.shown = s.say.length; L(`<b>${s.nm}</b> 작업 멈춤`); render(); }
-function send() {
+async function send() {
   const v = $('#input').value.trim(); if (!v) return;
-  const id = $('#target').value || 'lead', s = g(id);
-  $('#input').value = '';
-  s.prompt = v; s.st = 'run'; s.since = now(); s.last = now(); s.si = 0; s.limit = 5; s.shown = 0;
-  s.say = id === 'lead' ? '요청을 나눠서 핌스·미란다 에이전트에 맡겼어요. 진행 상황을 모아서 알려 드릴게요.' : '요청을 확인했어요. 관련 코드를 찾아보고 수정할게요.';
-  s.script = id === 'lead' ? [['Agent','pims · 요청 분석'],['Agent','miranda · 요청 분석'],['TaskOutput','결과 수집']] : [['Read','CLAUDE.md'],['Grep','관련 코드 검색'],['Edit','대상 파일 수정'],['Bash','테스트 실행']];
-  s.feed.push({tool:'Read', arg:'요청 확인', st:'run', t:now()});
-  if (id === 'lead') ['pims', 'miranda'].forEach((k, i) => setTimeout(() => {
-    const a = g(k); msgs[k] = (msgs[k] || 0) + 1; a.st = 'run'; a.since = now(); a.last = now(); a.si = 0; a.limit = 4; a.shown = 0; a.prompt = '[총괄] ' + v;
-    a.say = '총괄 지시를 받았어요. 저장소에서 해당 부분을 찾아 수정 중이에요.'; a.script = [['Read','CLAUDE.md'],['Grep','관련 코드 검색'],['Edit','수정'],['Bash','테스트']];
-    a.feed.push({tool:'Read', arg:'지시 확인', st:'run', t:now()}); L(`<span class="v">총괄 → ${a.nm}</span> 지시 전달`); render();
-  }, 1200 + i * 900));
-  L(`<b>나 → ${s.nm}</b> ${esc(v)}`); select(id);
+  const it = byKey(sel), sid = $('#target').value; if (!sid) return toast('appr', '받을 세션이 없어요', '');
+  const text = it && it.kind === 'a' && it.sid === sid ? `${it.nm}(${it.type}) 에이전트에게: ${v}` : v;
+  if (await act('/api/send', { session: sid, text })) { $('#input').value = ''; toast('', '보냈어요', text.slice(0, 80)); }
 }
-function select(id) { sel = id; tab = 'now'; render(); const el = document.querySelector(`.sess[data-id="${id}"]`); el && el.scrollIntoView({block:'nearest'}); }
+function toast(kind, title, body, key) {
+  const el = document.createElement('div'); el.className = 'toast ' + kind; el.innerHTML = `<b>${esc(title)}</b><span>${esc(body)}</span>`;
+  el.onclick = () => { if (key) select(key); el.remove(); };
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), 6000);
+}
+function select(k) { sel = k; tab = 'now'; $('#target').dataset.manual = ''; render(); const el = document.querySelector(`.sess[data-k="${CSS.escape(k)}"]`); el && el.scrollIntoView({ block: 'nearest' }); }
 
-/* ---------- view, zoom, keys, palette ---------- */
-function setView(v) { view = v; document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); $('#lgrid').hidden = v !== 'grid'; $('#stage').style.display = $('#zoom').style.display = $('#legend').style.display = v === 'graph' ? '' : 'none'; sigs.graph = sigs.grid = null; render(); fit(); }
+/* ---------- 보기 · 확대 · 단축키 · 팔레트 ---------- */
+function setView(v) { view = v; document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); $('#lgrid').hidden = v !== 'grid'; $('#stage').style.display = $('#zoom').style.display = $('#legend').style.display = v === 'graph' ? '' : 'none'; render(); if (v === 'graph') fit(); }
 document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.v));
-document.querySelectorAll('.chip[data-f]').forEach(b => b.onclick = () => { filter = filter === b.dataset.f ? null : b.dataset.f; if (b.dataset.f === 'appr') { const a = S.find(s => stOf(s) === 'appr'); a && select(a.id); } render(); });
-function apply() { $('#stage').style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
-function fit() { const c = $('#canvas'), w = c.clientWidth, h = c.clientHeight - 50; scale = Math.min(w / W, h / H, 1.4) * .94; tx = (w - W * scale) / 2; ty = 44 + (h - H * scale) / 2; apply(); }
+document.querySelectorAll('.chip[data-f]').forEach(b => b.onclick = () => { filter = filter === b.dataset.f ? null : b.dataset.f; if (b.dataset.f === 'appr') { const a = items().find(i => i.st === 'appr'); a && (sel = a.key); } render(); });
+function applyT() { $('#stage').style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
+function fit() { const c = $('#canvas'), w = c.clientWidth, h = c.clientHeight - 50; scale = Math.min(w / W, h / H, 1.3) * .94; tx = (w - W * scale) / 2; ty = 44 + (h - H * scale) / 2; applyT(); }
 const cv = $('#canvas'); let drag = null;
-cv.addEventListener('mousedown', e => { if (view !== 'graph' || e.target.closest('.node,.zoom')) return; drag = [e.clientX - tx, e.clientY - ty]; });
-addEventListener('mousemove', e => { if (drag) { tx = e.clientX - drag[0]; ty = e.clientY - drag[1]; apply(); } });
+cv.addEventListener('mousedown', e => { if (view !== 'graph' || e.target.closest('.node,.zoom,.emptyc div')) return; drag = [e.clientX - tx, e.clientY - ty]; });
+addEventListener('mousemove', e => { if (drag) { tx = e.clientX - drag[0]; ty = e.clientY - drag[1]; applyT(); } });
 addEventListener('mouseup', () => drag = null);
-cv.addEventListener('wheel', e => { if (view !== 'graph') return; e.preventDefault(); const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, k = e.deltaY < 0 ? 1.1 : .9; tx = mx - (mx - tx) * k; ty = my - (my - ty) * k; scale *= k; apply(); }, {passive:false});
-$('#zi').onclick = () => { scale *= 1.15; apply(); }; $('#zo').onclick = () => { scale /= 1.15; apply(); }; $('#zf').onclick = fit;
+cv.addEventListener('wheel', e => { if (view !== 'graph') return; e.preventDefault(); const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, k = e.deltaY < 0 ? 1.1 : .9; tx = mx - (mx - tx) * k; ty = my - (my - ty) * k; scale *= k; applyT(); }, { passive: false });
+$('#zi').onclick = () => { scale *= 1.15; applyT(); }; $('#zo').onclick = () => { scale /= 1.15; applyT(); }; $('#zf').onclick = fit;
 addEventListener('resize', fit);
 $('#acth').onclick = () => { const a = $('#act'); a.classList.toggle('open'); $('#afold').textContent = a.classList.contains('open') ? '접기 ▾' : '펼치기 ▴'; setTimeout(fit, 220); };
 $('#send').onclick = send;
+$('#target').onchange = () => $('#target').dataset.manual = '1';
 $('#input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $('#q').addEventListener('input', render);
+setInterval(() => {
+  const all = items();
+  document.querySelectorAll('[data-el]').forEach(el => { const it = all.find(i => i.key === el.dataset.el); if (it) el.textContent = elapsed(it); });
+  if (all.some(i => i.st === 'stall' || (i.x && i.x.status === 'run' && now() - i.x.last > 59000 && now() - i.x.last < 62000))) render();
+}, 1000);
 
 const PAL = () => [
-  ...S.map(s => ({t:`${s.nm} 세션 열기`, k:stOf(s) === 'run' ? '작업 중' : LBL[stOf(s)], f:() => select(s.id)})),
-  {t:'승인 대기로 이동', k:'1개', f:() => { const a = S.find(s => stOf(s) === 'appr'); a && select(a.id); }},
-  {t:'라이브 그리드 보기', k:'G', f:() => setView('grid')}, {t:'조직도 보기', k:'G', f:() => setView('graph')},
-  {t:'총괄에게 지시 쓰기', k:'', f:() => { $('#target').value = 'lead'; $('#input').focus(); }},
-  {t:'활동 로그 펼치기/접기', k:'', f:() => $('#acth').click()},
+  ...items().filter(i => i.kind === 's' || i.x).map(i => ({ t: `${i.nm} 열기`, k: LBL[i.st], f: () => select(i.key) })),
+  { t: '승인 대기로 이동', k: '', f: () => { const a = items().find(i => i.st === 'appr'); a && select(a.key); } },
+  { t: '라이브 그리드 보기', k: 'G', f: () => setView('grid') }, { t: '조직도 보기', k: 'G', f: () => setView('graph') },
+  { t: '지시 쓰기', k: '', f: () => $('#input').focus() },
+  { t: '활동 로그 펼치기/접기', k: '', f: () => $('#acth').click() },
 ];
 let palI = 0;
-function palRender() { const q = $('#palq').value.trim(); const items = PAL().filter(i => !q || i.t.includes(q)); palI = Math.min(palI, Math.max(0, items.length - 1));
-  $('#palist').innerHTML = items.map((i, n) => `<div class="pi ${n === palI ? 'on' : ''}" data-n="${n}">${esc(i.t)}<small>${i.k}</small></div>`).join('') || '<div class="empty">결과 없음</div>';
-  $('#palist').querySelectorAll('.pi').forEach(el => el.onclick = () => { items[+el.dataset.n].f(); palClose(); }); return items; }
+function palRender() { const q = $('#palq').value.trim(); const its = PAL().filter(i => !q || i.t.includes(q)); palI = Math.min(palI, Math.max(0, its.length - 1));
+  $('#palist').innerHTML = its.map((i, n) => `<div class="pi ${n === palI ? 'on' : ''}" data-n="${n}">${esc(i.t)}<small>${esc(i.k)}</small></div>`).join('') || '<div class="empty">결과 없음</div>';
+  $('#palist').querySelectorAll('.pi').forEach(el => el.onclick = () => { its[+el.dataset.n].f(); palClose(); }); return its; }
 function palOpen() { $('#pal').classList.add('open'); $('#palq').value = ''; palI = 0; palRender(); $('#palq').focus(); }
 function palClose() { $('#pal').classList.remove('open'); }
 $('#openPal').onclick = palOpen;
 $('#pal').onclick = e => { if (e.target.id === 'pal') palClose(); };
 $('#palq').addEventListener('input', () => { palI = 0; palRender(); });
-$('#palq').addEventListener('keydown', e => { const items = palRender();
-  if (e.key === 'ArrowDown') { palI = (palI + 1) % items.length; palRender(); e.preventDefault(); }
-  else if (e.key === 'ArrowUp') { palI = (palI - 1 + items.length) % items.length; palRender(); e.preventDefault(); }
-  else if (e.key === 'Enter' && items[palI]) { items[palI].f(); palClose(); } else if (e.key === 'Escape') palClose(); });
+$('#palq').addEventListener('keydown', e => { const its = palRender();
+  if (e.key === 'ArrowDown') { palI = (palI + 1) % its.length; palRender(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { palI = (palI - 1 + its.length) % its.length; palRender(); e.preventDefault(); }
+  else if (e.key === 'Enter' && its[palI]) { its[palI].f(); palClose(); } else if (e.key === 'Escape') palClose(); });
 addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palOpen(); return; }
   const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
   if (typing) { if (e.key === 'Escape') document.activeElement.blur(); return; }
   if (e.key === '/') { e.preventDefault(); $('#q').focus(); }
   else if (e.key === 'g') setView(view === 'graph' ? 'grid' : 'graph');
-  else if (e.key === 'j' || e.key === 'k') { const i = S.findIndex(s => s.id === sel); select(S[(i + (e.key === 'j' ? 1 : -1) + S.length) % S.length].id); }
+  else if (e.key === 'j' || e.key === 'k') { const all = items(); if (!all.length) return; const i = all.findIndex(x => x.key === sel); select(all[(i + (e.key === 'j' ? 1 : -1) + all.length) % all.length].key); }
   else if (e.key === '1') decide('yes'); else if (e.key === '2') decide('always'); else if (e.key === 'Escape') decide('no');
 });
 
-log = [['10:18:02','애수기 연결 — 세션 6개 감지'],['10:20:41','<span class="v">총괄 → 백엔드</span> GET /notice 스펙 조회'],['10:21:03','<span class="v">총괄 → 유저웹 · 빔스</span> pinned 반영 지시'],['10:21:30','<b>빔스</b> 승인 요청: git push --force']];
-renderTarget();
-const h = location.hash.slice(1); if (h === 'grid') view = 'grid'; else if (g(h)) sel = h;
-setView(view);
-setTimeout(() => toast('appr', '⏸ 빔스 승인 필요', 'git push --force origin feat/notice-pinned', 'vims'), 900);
+fetch('/api/state', { cache: 'no-store' }).then(r => r.status === 401 ? (location.href = '/login') : r.json()).then(d => d && apply(d)).catch(() => {});
+connect();
+setView('graph');
 </script>
 </body>
 </html>
