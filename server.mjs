@@ -1,9 +1,11 @@
-// 대시보드 서버 — 아이디·비밀번호 + OTP(TOTP) 2단계 로그인. 외부 패키지 없음.
+// 대시보드 서버 — 아이디·비밀번호 + OTP(TOTP) 2단계 로그인, Claude Code 세션 연동. 외부 패키지 없음.
 import http from 'node:http';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { randomBytes, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
+import { createStore, hookToken } from './agents.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const BRAND = 'JEFF AGENTS';
@@ -71,6 +73,26 @@ export function createApp(cfg) {
   const trustProxy = cfg.TRUST_PROXY === '1';
   const secretFile = cfg.TOTP_FILE || join(ROOT, '.totp-secret');
   let lastUsed = -1;
+  // 세션 상태: 훅으로 받고, 화면에는 SSE 로 밀어준다
+  const clients = new Set();
+  let tmr = null;
+  const stateFile = cfg.STATE_FILE || join(homedir(), '.agent-dash', 'state.json');
+  let initial = null;
+  if (!cfg.NO_SYNC) try { initial = JSON.parse(readFileSync(stateFile, 'utf8')); } catch {}
+  const store = createStore({ initial, onChange: () => { clearTimeout(tmr); tmr = setTimeout(() => {
+    const snap = store.snapshot(), d = `data: ${JSON.stringify(snap)}\n\n`;
+    for (const c of clients) c.write(d);
+    if (!cfg.NO_SYNC) try { writeFileSync(stateFile, JSON.stringify(snap), { mode: 0o600 }); } catch {}
+  }, 250); } });
+  const hookTok = cfg.HOOK_TOKEN || hookToken();
+  if (!cfg.NO_SYNC) setInterval(() => store.sync(), 10000).unref();
+  // 훅은 애수기 안(127.0.0.1)에서 직접 온 것만 받는다. 10번 nginx 를 거친 요청은 X-Real-IP 가 붙어 있어 거절된다.
+  const loopback = req => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && !req.headers['x-real-ip'] && !req.headers['x-forwarded-for'];
+  const readRaw = (req, max) => new Promise((ok, no) => {
+    let b = '', n = 0; req.setEncoding('utf8');
+    req.on('data', c => { n += c.length; if (n > max) { no(new Error('too large')); req.destroy(); } else b += c; });
+    req.on('end', () => ok(b)); req.on('error', no);
+  });
   const getSecret = () => cfg.DASH_TOTP_SECRET || (existsSync(secretFile) ? readFileSync(secretFile, 'utf8').trim() : '');
 
   const ipOf = req => (trustProxy && (req.headers['x-real-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim())) || req.socket.remoteAddress;
@@ -136,6 +158,11 @@ export function createApp(cfg) {
     const isGet = req.method === 'GET' || req.method === 'HEAD';
     try {
       if (path === '/healthz') return send(res, 200, 'ok');
+      if (path === '/hook' && req.method === 'POST') {
+        if (!loopback(req) || !same(req.headers['x-hook-token'] || '', hookTok)) return send(res, 403, 'forbidden');
+        try { store.ingest(JSON.parse(await readRaw(req, 2_000_000)), String(req.headers['x-tmux-pane'] || '')); } catch (e) { console.error('[hook]', e.message); }
+        return send(res, 204);
+      }
       if (isGet && PUBLIC[path]) { const b = file(PUBLIC[path]); return b ? send(res, 200, b, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }) : send(res, 404, 'not found'); }
       if (req.method === 'POST' && !sameOrigin(req)) return send(res, 403, 'forbidden');
 
@@ -191,6 +218,28 @@ export function createApp(cfg) {
       }
 
       if (!authed(req)) return isGet && path === '/' ? go(res, '/login') : send(res, 401, 'login required');
+
+      if (path === '/api/state' && isGet) return send(res, 200, JSON.stringify(store.snapshot()), { 'Content-Type': 'application/json' });
+      if (path === '/events' && isGet) {
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no', 'X-Content-Type-Options': 'nosniff' });
+        res.write(`data: ${JSON.stringify(store.snapshot())}\n\n`);
+        clients.add(res);
+        const hb = setInterval(() => res.write(': ping\n\n'), 25000);
+        req.on('close', () => { clients.delete(res); clearInterval(hb); });
+        return;
+      }
+      if (path.startsWith('/api/') && req.method === 'POST') {
+        if (!String(req.headers['content-type'] || '').startsWith('application/json')) return send(res, 415, 'json only');
+        const b = JSON.parse((await readRaw(req, 20000)) || '{}');
+        try {
+          if (path === '/api/send') await store.send(b.session, b.text);
+          else if (path === '/api/approve') await store.approve(b.session, b.choice, b.reason);
+          else if (path === '/api/stop') await store.stop(b.session);
+          else return send(res, 404, 'not found');
+          console.log(`[api] ${path} ip=${ipOf(req)}`);
+          return send(res, 200, '{"ok":true}', { 'Content-Type': 'application/json' });
+        } catch (e) { return send(res, 409, JSON.stringify({ error: e.message }), { 'Content-Type': 'application/json' }); }
+      }
 
       const s = isGet && PRIVATE[path];
       const body = s && file(s[0]);
