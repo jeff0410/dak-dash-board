@@ -1,46 +1,94 @@
 <!doctype html>
-<html lang="ko">
+<html lang="ko" data-mode="{{MODE}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>RTMC Agents · 로그인</title>
-<link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
+<title>{{BRAND}} · 로그인</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Audiowide&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
 :root{--bg:#1b1528;--card:#2a2140;--line:#4d3f78;--text:#f6f0ff;--sub:#bcaee0;--dim:#8676ad;--pink:#ff7edb;--hot:#ff2e97;--cyan:#36f9f6;--yellow:#fede5d;--red:#fe4450}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{background:radial-gradient(ellipse 70% 50% at 50% 100%,rgba(255,46,151,.22),transparent 70%),linear-gradient(180deg,#1b1528,#28173a);color:var(--text);font:15px/1.5 Pretendard,system-ui,sans-serif;display:grid;place-items:center;overflow:hidden;padding:16px}
+body{background:radial-gradient(ellipse 70% 50% at 50% 100%,rgba(255,46,151,.22),transparent 70%),linear-gradient(180deg,#1b1528,#28173a);color:var(--text);font:15px/1.5 Pretendard,system-ui,sans-serif;display:grid;place-items:center;overflow:auto;padding:16px}
 .grid{position:fixed;left:-60%;right:-60%;bottom:0;height:45%;pointer-events:none;background-image:linear-gradient(rgba(255,126,219,.3) 1px,transparent 1px),linear-gradient(90deg,rgba(255,126,219,.3) 1px,transparent 1px);background-size:64px 44px;transform:perspective(260px) rotateX(62deg);transform-origin:bottom;-webkit-mask:linear-gradient(to top,#000 10%,transparent 95%);animation:gm 3.5s linear infinite}
 @keyframes gm{to{background-position:0 44px}}
 form{position:relative;width:100%;max-width:380px;background:rgba(42,33,64,.92);border:1px solid var(--line);border-radius:18px;padding:34px 30px 28px;box-shadow:0 0 40px rgba(255,46,151,.25);backdrop-filter:blur(6px)}
 .logo{font-family:Audiowide,sans-serif;font-size:26px;letter-spacing:1px;text-align:center;background:linear-gradient(90deg,var(--yellow),var(--pink) 45%,var(--cyan));-webkit-background-clip:text;color:transparent;filter:drop-shadow(0 0 8px rgba(255,46,151,.6))}
-.sub{text-align:center;color:var(--dim);font-size:13px;margin:6px 0 26px}
+.sub{text-align:center;color:var(--dim);font-size:13px;margin:6px 0 22px}
+.steps{display:flex;justify-content:center;gap:8px;margin:-8px 0 20px;font-size:12px;color:var(--dim)}
+.steps span{padding:2px 10px;border-radius:99px;border:1px solid var(--line)}
+.steps span.on{border-color:var(--pink);color:var(--text)}
 label{display:block;font-size:13px;color:var(--sub);margin:14px 0 6px}
 input{width:100%;height:46px;border-radius:10px;border:1px solid var(--line);background:#15101f;color:var(--text);padding:0 14px;font:inherit;outline:none;transition:.15s}
 input:focus{border-color:var(--pink);box-shadow:0 0 0 3px rgba(255,46,151,.18)}
-button{width:100%;height:48px;margin-top:24px;border:0;border-radius:10px;background:linear-gradient(90deg,var(--hot),#c73cff);color:#fff;font:700 15px Pretendard,sans-serif;cursor:pointer;box-shadow:0 0 18px rgba(255,46,151,.45)}
+input.code{font:600 26px "JetBrains Mono",monospace;letter-spacing:12px;text-align:center;height:58px}
+button{width:100%;height:48px;margin-top:22px;border:0;border-radius:10px;background:linear-gradient(90deg,var(--hot),#c73cff);color:#fff;font:700 15px Pretendard,sans-serif;cursor:pointer;box-shadow:0 0 18px rgba(255,46,151,.45)}
 button:hover{filter:brightness(1.1)}
+.qr{display:grid;place-items:center;background:#fff;border-radius:12px;padding:12px;width:204px;height:204px;margin:4px auto 12px}
+.secret{font:600 13px "JetBrains Mono",monospace;text-align:center;color:var(--yellow);word-break:break-all;background:#15101f;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.hint{font-size:12.5px;color:var(--sub);line-height:1.6;margin-bottom:12px}
+.back{display:block;text-align:center;margin-top:14px;font-size:12.5px;color:var(--dim)}
 .err{display:none;margin-top:16px;padding:10px 12px;border-radius:9px;background:rgba(254,68,80,.12);border:1px solid rgba(254,68,80,.4);color:#ff9aa2;font-size:13px}
 .err.show{display:block}
+.m{display:none}
+[data-mode="password"] .m-password,[data-mode="otp"] .m-otp,[data-mode="setup"] .m-setup{display:block}
 </style>
 </head>
 <body>
 <div class="grid"></div>
-<form method="post" action="/login">
-  <div class="logo">RTMC AGENTS</div>
+
+<form class="m m-password" method="post" action="/login">
+  <div class="logo">{{BRAND}}</div>
   <div class="sub">에이전트 대시보드 · 로그인이 필요해요</div>
+  <div class="steps"><span class="on">1 비밀번호</span><span>2 OTP</span></div>
   <label for="user">아이디</label>
-  <input id="user" name="user" autocomplete="username" required autofocus>
+  <input id="user" name="user" autocomplete="username" required>
   <label for="password">비밀번호</label>
   <input id="password" name="password" type="password" autocomplete="current-password" required>
-  <button type="submit">로그인</button>
-  <div class="err" id="err"></div>
+  <button type="submit">다음</button>
+  <div class="err"></div>
 </form>
+
+<form class="m m-otp" method="post" action="/login/otp">
+  <div class="logo">{{BRAND}}</div>
+  <div class="sub">Google OTP 앱의 6자리 코드를 넣어 주세요</div>
+  <div class="steps"><span>1 비밀번호</span><span class="on">2 OTP</span></div>
+  <input class="code" name="code" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required>
+  <button type="submit">로그인</button>
+  <a class="back" href="/login">← 처음부터</a>
+  <div class="err"></div>
+</form>
+
+<form class="m m-setup" method="post" action="/login/setup">
+  <div class="logo">{{BRAND}}</div>
+  <div class="sub">처음 한 번 · OTP 앱 등록</div>
+  <div class="steps"><span>1 비밀번호</span><span class="on">2 OTP 등록</span></div>
+  <div class="hint">Google OTP 앱에서 <b>+ → QR 코드 스캔</b>으로 아래 코드를 찍고, 앱에 뜬 6자리를 넣으면 등록이 끝나요. 이 화면은 다시 나오지 않아요.</div>
+  <div class="qr" id="qr"></div>
+  <div class="secret" id="secret">{{SECRET}}</div>
+  <label for="code">앱에 뜬 6자리</label>
+  <input id="code" class="code" name="code" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required>
+  <button type="submit">등록하고 로그인</button>
+  <a class="back" href="/login">← 처음부터</a>
+  <div class="err"></div>
+</form>
+
+<span id="uri" hidden>{{URI}}</span>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const e = new URLSearchParams(location.search).get('e'), el = document.getElementById('err');
-if (e) { el.textContent = e === 'locked' ? '실패가 너무 많아요. 15분 뒤에 다시 시도해 주세요.' : '아이디 또는 비밀번호가 맞지 않아요.'; el.classList.add('show'); }
+const mode = document.documentElement.dataset.mode;
+const form = document.querySelector('.m-' + mode);
+const e = new URLSearchParams(location.search).get('e');
+const MSG = { locked: '실패가 너무 많아요. 15분 뒤에 다시 시도해 주세요.', retry: 'OTP 를 여러 번 틀려서 처음부터 다시 로그인해 주세요.', 1: mode === 'password' ? '아이디 또는 비밀번호가 맞지 않아요.' : '코드가 맞지 않아요. 앱의 최신 코드를 넣어 주세요.' };
+if (e && MSG[e]) { const el = form.querySelector('.err'); el.textContent = MSG[e]; el.classList.add('show'); }
+const first = form.querySelector('input'); first && first.focus();
+if (mode === 'setup' && window.QRCode) new QRCode(document.getElementById('qr'), { text: document.getElementById('uri').textContent, width: 180, height: 180, correctLevel: QRCode.CorrectLevel.M });
+document.querySelectorAll('input.code').forEach(i => i.addEventListener('input', () => { i.value = i.value.replace(/\D/g, '').slice(0, 6); if (i.value.length === 6) i.form.requestSubmit(); }));
 </script>
 </body>
 </html>
