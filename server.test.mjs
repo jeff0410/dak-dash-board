@@ -173,3 +173,17 @@ test('파일 업로드는 로그인 · 같은 사이트만, 이름은 안전하�
     assert.equal(statSync(path).mode & 0o777, 0o600);
   });
 });
+
+test('지시 뒤에 커밋한 변경도 이번 지시의 변경으로 보인다', async () => {
+  const { gitHeads, gitChanges } = await import('./agents.mjs');
+  const { execFileSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const dir = mkdtempSync(join(tmpdir(), 'repo-'));
+  const g = (...a) => execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a]);
+  g('init', '-q'); writeFileSync(join(dir, 'a.txt'), 'one\n'); g('add', '.'); g('commit', '-qm', 'init');
+  const base = await gitHeads(dir);
+  writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n'); g('commit', '-qam', 'edit');
+  assert.deepEqual(await gitChanges(dir), []);                       // HEAD 기준이면 안 보인다
+  const f = await gitChanges(dir, base);
+  assert.equal(f.length, 1); assert.equal(f[0].path, 'a.txt'); assert.deepEqual([f[0].a, f[0].r], [1, 0]);
+});
