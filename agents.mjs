@@ -39,15 +39,26 @@ export function parseDiff(out, pre = '') {
   for (const x of files) if (x.diff.length > 400) x.diff.splice(400, x.diff.length, ['c', '⋯ 이하 생략']);
   return files;
 }
-export async function gitChanges(cwd) {
-  if (!cwd) return null;
+async function repoList(cwd) {
   let repos = [];
   if (await git(cwd, 'rev-parse', '--git-dir') !== null) repos = [[cwd, '']];
   else try { repos = readdirSync(cwd, { withFileTypes: true }).filter(d => d.isDirectory() && existsSync(join(cwd, d.name, '.git'))).map(d => [join(cwd, d.name), d.name + '/']); } catch {}
+  return repos;
+}
+// 지시를 받은 순간의 레포별 커밋. 이후 커밋한 것까지 '이번 지시의 변경' 으로 보인다.
+export async function gitHeads(cwd) {
+  const h = {};
+  if (cwd) for (const [dir] of await repoList(cwd)) { const x = await git(dir, 'rev-parse', 'HEAD'); if (x) h[dir] = x.trim(); }
+  return h;
+}
+export async function gitChanges(cwd, base = {}) {
+  if (!cwd) return null;
+  const repos = await repoList(cwd);
   if (!repos.length) return null;
   const out = [];
   for (const [dir, pre] of repos) {
-    out.push(...parseDiff(await git(dir, 'diff', 'HEAD', '--no-color', '--no-ext-diff', '-U2') || '', pre));
+    const d = a => git(dir, 'diff', a, '--no-color', '--no-ext-diff', '-U2', '--');
+    out.push(...parseDiff((base?.[dir] && await d(base[dir])) ?? await d('HEAD') ?? '', pre));
     const nu = String(await git(dir, 'ls-files', '--others', '--exclude-standard', '-z') || '').split('\0').filter(p => p && !p.startsWith(".serena/"));
     for (const p of nu.slice(0, 20)) {
       let t = ''; try { if (statSync(join(dir, p)).size < 200000) t = readFileSync(join(dir, p), 'utf8'); } catch {}
@@ -95,7 +106,7 @@ export function createStore({ onChange = () => {}, capture = pane => tmux('captu
   // 수정 · 명령 · 완료 뒤 1.5초 모아서 git 변경을 다시 읽는다
   const gt = new Map();
   const refreshGit = s => { clearTimeout(gt.get(s.id)); const t = setTimeout(async () => {
-    const g = await gitChanges(s.cwd);
+    const g = await gitChanges(s.cwd, s.base);
     if (S.has(s.id) && JSON.stringify(g) !== JSON.stringify(s.git ?? null)) { s.git = g; onChange(); }
   }, 1500); t.unref?.(); gt.set(s.id, t); };
   const settleRunning = t => t.feed.forEach(x => { if (x.st === 'run' && x.tool !== 'Agent') x.st = 'ok'; });
@@ -121,6 +132,7 @@ export function createStore({ onChange = () => {}, capture = pane => tmux('captu
       s.status = 'run'; // 백그라운드 에이전트 완료 알림 — 사용자 지시가 아니다
     }
     else if (ev === 'UserPromptSubmit') {
+      gitHeads(s.cwd).then(h => { s.base = h; refreshGit(s); });
       s.prompt = cut(e.prompt, 4000); s.answer = ''; s.status = 'run'; s.since = t; s.approval = null; s.files = []; s.tool = ''; s.arg = '';
       L(s, `지시: ${cut(e.prompt, 80)}`);
     }
