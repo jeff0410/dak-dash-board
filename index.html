@@ -201,6 +201,7 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 .empty{color:var(--dim);text-align:center;padding:50px 10px}
 .compose{padding:12px 18px 14px;border-top:1px solid var(--line)}
 .cbox{border:1px solid var(--line2);border-radius:12px;background:var(--bg);padding:10px 12px;transition:.15s}
+.cbox.drag{border-color:var(--pink);border-style:dashed;background:rgba(255,46,151,.06)}
 .cbox:focus-within{border-color:var(--pink);box-shadow:0 0 0 3px rgba(255,46,151,.15)}
 .cbox textarea{width:100%;height:48px;resize:none;background:none;border:0;outline:none}
 .crow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim)}
@@ -327,7 +328,7 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
     <div class="pbody" id="pbody"></div>
     <div class="compose">
       <div class="cbox">
-        <textarea id="input" placeholder="지시 입력 — 받는 세션의 tmux 창에 그대로 입력돼요"></textarea>
+        <textarea id="input" placeholder="지시 입력 — 받는 세션의 tmux 창에 그대로 입력돼요 · 캡처 붙여넣기 · 파일 끌어놓기 가능"></textarea>
         <div class="crow"><span class="lbl">받는 세션</span><select class="target" id="target"></select><span class="sp"></span><span class="kh">Enter 보내기 · Shift+Enter 줄바꿈</span><button class="send" id="send">보내기 ➤</button></div>
       </div>
       <div class="chint" id="chint"></div>
@@ -630,6 +631,26 @@ addEventListener('resize', fit);
 $('#acth').onclick = () => { const a = $('#act'); a.classList.toggle('open'); $('#afold').textContent = a.classList.contains('open') ? '접기 ▾' : '펼치기 ▴'; setTimeout(fit, 220); };
 $('#send').onclick = send;
 $('#target').onchange = () => $('#target').dataset.manual = '1';
+// 캡처 붙여넣기 · 파일 끌어놓기 → 애수기에 올리고 그 경로를 입력칸에 넣는다
+async function upload(files) {
+  const ta = $('#input');
+  for (const f of files) {
+    const r = await fetch('/api/upload', { method: 'POST', headers: { 'X-File-Name': encodeURIComponent(f.name || 'paste.png') }, body: f }).catch(() => null);
+    if (r?.status === 401) return location.href = '/login';
+    if (!r?.ok) { toast('appr', '첨부 실패', `${f.name} · ${r ? r.status : '서버에 닿지 않았어요'}`); continue; }
+    const { path } = await r.json(), at = ta.selectionStart ?? ta.value.length;
+    const add = (at && !/\s$/.test(ta.value.slice(0, at)) ? ' ' : '') + path + ' ';
+    ta.value = ta.value.slice(0, at) + add + ta.value.slice(at);
+    ta.selectionStart = ta.selectionEnd = at + add.length;
+    toast('', '첨부했어요', f.name || '캡처');
+  }
+  ta.focus();
+}
+$('#input').addEventListener('paste', e => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length) { e.preventDefault(); upload(fs); } });
+const cbox = $('.cbox');
+cbox.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); cbox.classList.add('drag'); } });
+cbox.addEventListener('dragleave', e => { if (!cbox.contains(e.relatedTarget)) cbox.classList.remove('drag'); });
+cbox.addEventListener('drop', e => { cbox.classList.remove('drag'); if (e.dataTransfer.files.length) { e.preventDefault(); upload([...e.dataTransfer.files]); } });
 $('#input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 $('#q').addEventListener('input', render);
 setInterval(() => {
