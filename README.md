@@ -5,7 +5,18 @@
 ## 지금 상태
 
 - `index.html` — 화면 샘플. 데이터는 예시이고 실제 세션과는 아직 연결되지 않았다.
-- 브라우저에서 `index.html` 을 열면 바로 볼 수 있다.
+- `server.mjs` — 로그인한 사용자에게만 화면을 내주는 서버(외부 패키지 없음, Node 20+).
+
+## 실행
+
+```bash
+cp .env.example .env && chmod 600 .env   # DASH_USER, DASH_PASSWORD(12자 이상) 채우기
+npm start                                # → http://127.0.0.1:4545 (계속 켜 두기: tmux new -d -s dashboard ./bin/run.sh)
+npm test                                 # 로그인 잠금 확인
+```
+
+- 로그인 5번 실패하면 그 IP 는 15분 동안 막힌다. 세션은 12시간 유지되고 서버를 다시 켜면 모두 로그아웃된다.
+- HTTPS 서브도메인 뒤에 둘 때는 `.env` 에 `COOKIE_SECURE=1`, `TRUST_PROXY=1`, `HOST=0.0.0.0` 을 넣는다.
 
 ## 화면
 
