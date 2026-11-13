@@ -1,6 +1,6 @@
 // 대시보드 서버 — 아이디·비밀번호 + OTP(TOTP) 2단계 로그인, Claude Code 세션 연동. 외부 패키지 없음.
 import http from 'node:http';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { randomBytes, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -88,6 +88,12 @@ export function createApp(cfg) {
   if (!cfg.NO_SYNC) setInterval(() => store.sync(), 10000).unref();
   // 훅은 애수기 안(127.0.0.1)에서 직접 온 것만 받는다. 10번 nginx 를 거친 요청은 X-Real-IP 가 붙어 있어 거절된다.
   const loopback = req => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress) && !req.headers['x-real-ip'] && !req.headers['x-forwarded-for'];
+  const readBuf = (req, max) => new Promise((ok, no) => {
+    const bs = []; let n = 0;
+    req.on('data', c => { n += c.length; if (n > max) { no(new Error('too large')); req.destroy(); } else bs.push(c); });
+    req.on('end', () => ok(Buffer.concat(bs))); req.on('error', no);
+  });
+  const upDir = cfg.UPLOAD_DIR || join(homedir(), '.agent-dash', 'uploads');
   const readRaw = (req, max) => new Promise((ok, no) => {
     let b = '', n = 0; req.setEncoding('utf8');
     req.on('data', c => { n += c.length; if (n > max) { no(new Error('too large')); req.destroy(); } else b += c; });
@@ -227,6 +233,18 @@ export function createApp(cfg) {
         const hb = setInterval(() => res.write(': ping\n\n'), 25000);
         req.on('close', () => { clients.delete(res); clearInterval(hb); });
         return;
+      }
+      // 붙여넣기 · 끌어놓기 파일 → 애수기에 저장하고 경로를 돌려준다. 그 경로를 지시에 넣으면 Claude 가 읽는다.
+      // ponytail: 오래된 파일은 지우지 않는다. 쌓이면 uploads 폴더를 비운다.
+      if (path === '/api/upload' && req.method === 'POST') {
+        const buf = await readBuf(req, 20 << 20);
+        if (!buf.length) return send(res, 400, 'empty');
+        const name = decodeURIComponent(String(req.headers['x-file-name'] || 'file')).replace(/[^\w.\-가-힣]/g, '_').replace(/^\.+/, '').slice(-80) || 'file';
+        mkdirSync(upDir, { recursive: true, mode: 0o700 });
+        const f = join(upDir, `${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}-${randomBytes(3).toString('hex')}-${name}`);
+        writeFileSync(f, buf, { mode: 0o600 });
+        console.log(`[api] /api/upload ${buf.length}B ip=${ipOf(req)}`);
+        return send(res, 200, JSON.stringify({ path: f }), { 'Content-Type': 'application/json' });
       }
       if (path.startsWith('/api/') && req.method === 'POST') {
         if (!String(req.headers['content-type'] || '').startsWith('application/json')) return send(res, 415, 'json only');
