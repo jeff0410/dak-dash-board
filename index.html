@@ -497,7 +497,7 @@ function renderPanel(all) {
   if (!it) { $('#ph').innerHTML = ''; $('#pbody').innerHTML = '<div class="empty">세션이 연결되면 여기서 보고 지시할 수 있어요.</div>'; $('#chint').textContent = ''; return; }
   sel = it.key;
   const st = it.st, x = it.x, s = it.s;
-  const files = x?.files || [], cmds = (x?.feed || []).filter(f => f.tool === 'Bash');
+  const files = (it.kind === 's' && x?.git) || x?.files || [], cmds = (x?.feed || []).filter(f => f.tool === 'Bash');
   const fa = files.reduce((t, f) => t + f.a, 0), fr = files.reduce((t, f) => t + f.r, 0);
   const canStop = it.kind === 's' && (st === 'run' || st === 'stall');
   $('#ph').innerHTML = `<div class="r1"><span class="title">${esc(it.nm)}</span>
