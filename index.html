@@ -627,56 +627,62 @@ addEventListener('keydown', e => {
   else if (e.key === '1') decide('yes'); else if (e.key === '2') decide('always'); else if (e.key === 'Escape') decide('no');
 });
 
-// 배경 조커: bg.jpg 를 원래 색의 파티클로 바꾼다. 흩어진 점이 모여 조커가 되고,
-// 화면을 돌아다니며 30가지 동작(걷기·구르기·점프·하트…)을 무작위로 한다.
-// 마우스를 대면 비켜나고, 누르면 터졌다가 다시 모인다. 콘솔에서 jokerAct('heart') 처럼 직접 시킬 수 있다.
+// 배경 조커: bg.jpg 를 원래 색의 파티클로 바꾼다. 흩어진 점이 모여 조커가 된다.
+// 점마다 깊이(z)를 줘서 머리·몸이 입체로 돌고, 머리는 목을 축으로 따로 움직이며, 머리카락은 늦게 따라와 출렁인다.
+// 평소엔 마우스 쪽을 쳐다보고, 30가지 동작을 무작위로 한다. 누르면 터졌다가 다시 모인다.
+// 콘솔에서 jokerAct('owl') 처럼 직접 시킬 수 있다.
 (() => {
   const cv = document.getElementById('dots'), box = document.getElementById('canvas'), ctx = cv.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const im = new Image(); im.src = 'bg.jpg';
-  const TAU = Math.PI * 2, rnd = Math.random;
+  const TAU = Math.PI * 2, PI = Math.PI, rnd = Math.random, sin = Math.sin, cos = Math.cos, abs = Math.abs;
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const ease = p => (p = clamp(p), p < .5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2);
-  const hop = p => Math.sin(Math.PI * clamp(p));
+  const hop = p => sin(PI * clamp(p));
   const hold = (p, a = .25) => p < a ? ease(p / a) : p > 1 - a ? ease((1 - p) / a) : 1;
   let P = [], W = 0, H = 0, img, px, S = 0, SW = 0, mx = -1e4, my = -1e4, born = 0, first = true;
+  let HC = { x: 0, y: 0, r: 1, neck: 0 };              // 머리 중심·반지름, 목 높이(스프라이트 좌표)
   const bursts = [];
   const J = { bx: 0, by: 0, fl: 1, act: null, st: null, t0: 0, next: 2.8, last: '' };
   const minX = () => SW * .28, maxX = () => W - SW * .28;
 
-  // 동작: d=길이(초), mv=끝나면 dir*dist 만큼 이동, face=끝나고 바라볼 방향, f=전체 자세, q=점마다 추가 이동
+  // 자세: x·y 이동, r 몸 기울기, sx·sy 크기(발밑 기준), yaw 몸 전체 좌우 회전(입체),
+  //       hy·hp·hr 머리 좌우 돌리기·끄덕·갸웃(목 기준), dim 어둡게, tint 물들이기, q 점마다 추가 이동
   const A = {
-    walk:      { d: st => st.dist / (S * .45), mv: 1, face: 1, f: (p, st) => { const k = Math.max(2, Math.round(st.d * 2.5)) * Math.PI; return { x: st.dir * st.dist * p, y: -Math.abs(Math.sin(p * k)) * S * .05, r: Math.sin(p * k) * .07, fl: st.dir }; } },
-    moonwalk:  { d: st => st.dist / (S * .3), mv: 1, f: (p, st) => ({ x: st.dir * st.dist * ease(p), fl: -st.dir, r: -st.dir * .06, sy: 1 + Math.sin(p * 20) * .02 }) },
-    roll:      { d: st => st.dist / (S * .4), mv: 1, face: 1, f: (p, st) => ({ x: st.dir * st.dist * ease(p), r: st.dir * st.dist * ease(p) / (S * .42), y: -hop(p) * S * .05, fl: st.dir }) },
-    cartwheel: { d: () => 1.6, mv: 1, face: 1, pre: st => st.dist = Math.min(st.dist, S * 1.2), f: (p, st) => ({ x: st.dir * st.dist * ease(p), r: st.dir * TAU * ease(p), y: -hop(p) * S * .35, fl: st.dir }) },
-    jump:      { d: () => 1.3, f: p => p < .2 ? { sy: 1 - hop(p / .4) * .25, sx: 1 + hop(p / .4) * .15 } : p < .8 ? { y: -hop((p - .2) / .6) * S * .5, sy: 1.12, sx: .92 } : { sy: 1 - hop((p - .8) / .2) * .2, sx: 1 + hop((p - .8) / .2) * .12 } },
-    doubleJump:{ d: () => 1.8, f: p => { const a = p < .5, u = a ? p / .5 : (p - .5) / .5; return { y: -hop(u) * S * (a ? .3 : .55), sy: 1 + hop(u) * .1, r: a ? 0 : J.fl * TAU * ease(u) } } },
-    backflip:  { d: () => 1.5, f: p => p < .2 ? { sy: 1 - hop(p / .4) * .25 } : p < .85 ? { y: -hop((p - .2) / .65) * S * .6, r: -J.fl * TAU * ease((p - .2) / .65) } : { sy: 1 - hop((p - .85) / .15) * .2 } },
-    spin:      { d: () => 1.8, f: p => ({ sx: Math.cos(ease(p) * TAU * 2), y: -hop(p) * S * .12 }) },
-    tilt:      { d: () => 2, f: (p, st) => ({ r: st.dir * .3 * hold(p, .3) }) },
-    nod:       { d: () => 1.6, f: p => ({ y: Math.abs(Math.sin(p * 3 * Math.PI)) * S * .03, r: Math.abs(Math.sin(p * 3 * Math.PI)) * .08 * J.fl }) },
-    shakeNo:   { d: () => 1.4, f: p => ({ x: Math.sin(p * 10 * Math.PI) * S * .04 * (1 - p), r: Math.sin(p * 10 * Math.PI) * .05 * (1 - p) }) },
-    dance:     { d: () => 3.2, f: p => ({ r: Math.sin(p * 8 * Math.PI) * .2, y: -Math.abs(Math.sin(p * 8 * Math.PI)) * S * .06, x: Math.sin(p * 4 * Math.PI) * S * .12, fl: Math.sin(p * 4 * Math.PI) > 0 ? 1 : -1 }) },
-    hops:      { d: () => 2.2, f: p => { const s = Math.abs(Math.sin(p * 5 * Math.PI)); return { y: -s * S * .14, sy: s < .2 ? .88 : 1.05, sx: s < .2 ? 1.08 : .97 }; } },
-    shiver:    { d: () => 1.5, f: p => ({ x: Math.sin(p * 90) * S * .012, sy: 1 - .03 * hop(p), sx: 1 - .03 * hop(p) }) },
-    peek:      { d: () => 4, pre: st => { st.dir = J.bx < W / 2 ? -1 : 1; st.dist = (st.dir < 0 ? J.bx : W - J.bx) + SW * .02; }, f: (p, st) => ({ x: st.dir * st.dist * (p < .3 ? ease(p / .3) : p < .7 ? 1 - .25 * hop((p - .3) / .4) : 1 - ease((p - .7) / .3)), r: p > .3 && p < .7 ? -st.dir * .25 * hop((p - .3) / .4) : 0 }) },
-    sleep:     { d: () => 5, f: p => ({ r: J.fl * .3 * hold(p, .15), y: S * .05 * hold(p, .15), sy: 1 + .04 * Math.sin(p * 6 * TAU), dim: .5 * hold(p, .15) }) },
-    pancake:   { d: () => 1.6, f: p => p < .5 ? { sy: 1 - .55 * ease(p / .5), sx: 1 + .5 * ease(p / .5) } : { sy: .45 + .55 * ease((p - .5) / .5) + Math.sin((p - .5) * 30) * .1 * (1 - p), sx: 1.5 - .5 * ease((p - .5) / .5) } },
-    growShrink:{ d: () => 2.6, f: p => { const k = p < .4 ? 1 + .35 * hop(p / .4) : p < .8 ? 1 - .45 * hop((p - .4) / .4) : 1; return { sx: k, sy: k }; } },
-    jelly:     { d: () => 2.2, f: () => ({}), q: (o, p) => [Math.sin(o.ly / S * 9 + p * 40) * S * .06 * hop(p), 0] },
-    melt:      { d: () => 3.6, f: () => ({}), q: (o, p, st, ps) => { const m = hold(p, .35); return [o.lx * ps.fl * m * .45 * o.rr, (S / 2 - o.ly) * m * (.5 + .45 * o.rr)]; } },
-    scatter:   { d: () => 2.4, f: () => ({}), q: (o, p) => { const m = hold(p, .3) * S * (.35 + o.rr * .7); return [Math.cos(o.ph) * m, Math.sin(o.ph) * m]; } },
-    swirl:     { d: () => 3, f: () => ({}), q: (o, p, st, ps) => { const m = hold(p, .3), x = o.lx * ps.fl, a = m * (3.2 - clamp(Math.hypot(x, o.ly) / S * 3.5, 0, 2.8)) * st.dir, c = Math.cos(a), s = Math.sin(a); return [x * c - o.ly * s - x, x * s + o.ly * c - o.ly]; } },
+    walk:      { d: st => st.dist / (S * .45), mv: 1, face: 1, f: (p, st) => { const k = Math.max(2, Math.round(st.d * 2.5)) * PI, s = sin(p * k);
+      return { x: st.dir * st.dist * p, y: -abs(s) * S * .05, r: s * .06, yaw: st.dir * .35, hy: st.dir * .45, hr: -s * .1, hp: abs(s) * .1 }; } },
+    moonwalk:  { d: st => st.dist / (S * .3), mv: 1, f: (p, st) => ({ x: st.dir * st.dist * ease(p), yaw: -st.dir * .4, hy: -st.dir * .6, r: -st.dir * .07, hr: sin(p * 20) * .06, sy: 1 + sin(p * 20) * .02 }) },
+    roll:      { d: st => st.dist / (S * .4), mv: 1, face: 1, f: (p, st) => ({ x: st.dir * st.dist * ease(p), r: st.dir * st.dist * ease(p) / (S * .42), y: -hop(p) * S * .05, hp: .3 * hop(p) }) },
+    cartwheel: { d: () => 1.6, mv: 1, face: 1, pre: st => st.dist = Math.min(st.dist, S * 1.2), f: (p, st) => ({ x: st.dir * st.dist * ease(p), r: st.dir * TAU * ease(p), y: -hop(p) * S * .35 }) },
+    jump:      { d: () => 1.3, f: p => p < .2 ? { sy: 1 - hop(p / .4) * .25, sx: 1 + hop(p / .4) * .15, hp: .2 * hop(p / .4) } : p < .8 ? { y: -hop((p - .2) / .6) * S * .5, sy: 1.12, sx: .92, hp: -.35 * hop((p - .2) / .6) } : { sy: 1 - hop((p - .8) / .2) * .2, sx: 1 + hop((p - .8) / .2) * .12, hp: .25 * hop((p - .8) / .2) } },
+    doubleJump:{ d: () => 1.8, f: p => { const a = p < .5, u = a ? p / .5 : (p - .5) / .5; return { y: -hop(u) * S * (a ? .3 : .55), sy: 1 + hop(u) * .1, yaw: a ? 0 : TAU * ease(u), hp: -.3 * hop(u) }; } },
+    backflip:  { d: () => 1.5, f: p => p < .2 ? { sy: 1 - hop(p / .4) * .25, hp: .3 * hop(p / .4) } : p < .85 ? { y: -hop((p - .2) / .65) * S * .6, r: -J.fl * TAU * ease((p - .2) / .65) } : { sy: 1 - hop((p - .85) / .15) * .2 } },
+    spin:      { d: () => 2, f: p => ({ yaw: ease(p) * TAU * 2, y: -hop(p) * S * .12, hr: sin(p * TAU * 2) * .1 }) },
+    owl:       { d: () => 2.6, f: p => ({ hy: ease((p - .1) / .8) * TAU * J.fl, hr: hop(p) * .15 }) },   // 머리만 한 바퀴
+    tilt:      { d: () => 2.2, f: (p, st) => ({ hr: st.dir * .4 * hold(p, .3), hy: st.dir * .25 * hold(p, .3), r: -st.dir * .04 * hold(p, .3) }) },
+    nod:       { d: () => 1.8, f: p => ({ hp: abs(sin(p * 3 * PI)) * .45, y: abs(sin(p * 3 * PI)) * S * .015 }) },
+    shakeNo:   { d: () => 1.6, f: p => ({ hy: sin(p * 8 * PI) * .7 * (1 - p * .6), r: sin(p * 8 * PI) * .03 }) },
+    dance:     { d: () => 3.4, f: p => { const s = sin(p * 8 * PI), w = sin(p * 4 * PI); return { r: s * .15, y: -abs(s) * S * .06, x: w * S * .12, yaw: w * .5, hr: -s * .25, hy: -w * .4 }; } },
+    hops:      { d: () => 2.2, f: p => { const s = abs(sin(p * 5 * PI)); return { y: -s * S * .14, sy: s < .2 ? .88 : 1.05, sx: s < .2 ? 1.08 : .97, hp: (s < .2 ? .2 : -.15) }; } },
+    shiver:    { d: () => 1.6, f: p => ({ x: sin(p * 90) * S * .012, hy: sin(p * 70) * .12, sy: 1 - .03 * hop(p), sx: 1 - .03 * hop(p), hp: .15 * hop(p) }) },
+    peek:      { d: () => 4.2, pre: st => { st.dir = J.bx < W / 2 ? -1 : 1; st.dist = (st.dir < 0 ? J.bx : W - J.bx) + SW * .02; },
+      f: (p, st) => { const m = p > .3 && p < .7 ? hop((p - .3) / .4) : 0; return { x: st.dir * st.dist * (p < .3 ? ease(p / .3) : p < .7 ? 1 - .25 * m : 1 - ease((p - .7) / .3)), r: -st.dir * .25 * m, hy: -st.dir * .7 * m, hr: -st.dir * .2 * m }; } },
+    sleep:     { d: () => 5.5, f: p => { const m = hold(p, .15); return { r: J.fl * .12 * m, hr: J.fl * .45 * m, hp: .4 * m, y: S * .04 * m, sy: 1 + .04 * sin(p * 6 * TAU) * m, dim: .5 * m }; } },
+    pancake:   { d: () => 1.6, f: p => p < .5 ? { sy: 1 - .55 * ease(p / .5), sx: 1 + .5 * ease(p / .5), hp: .3 * ease(p / .5) } : { sy: .45 + .55 * ease((p - .5) / .5) + sin((p - .5) * 30) * .1 * (1 - p), sx: 1.5 - .5 * ease((p - .5) / .5) } },
+    growShrink:{ d: () => 2.6, f: p => { const k = p < .4 ? 1 + .35 * hop(p / .4) : p < .8 ? 1 - .45 * hop((p - .4) / .4) : 1; return { sx: k, sy: k, hp: p < .4 ? -.2 * hop(p / .4) : .2 * hop((p - .4) / .4) }; } },
+    jelly:     { d: () => 2.2, f: p => ({ hr: sin(p * 20) * .15 * hop(p) }), q: (o, p) => [sin(o.ly / S * 9 + p * 40) * S * .06 * hop(p), 0] },
+    melt:      { d: () => 3.6, f: () => ({}), q: (o, p) => { const m = hold(p, .35); return [o.lx * m * .45 * o.rr, (S / 2 - o.ly) * m * (.5 + .45 * o.rr)]; } },
+    scatter:   { d: () => 2.4, f: () => ({}), q: (o, p) => { const m = hold(p, .3) * S * (.35 + o.rr * .7); return [cos(o.ph) * m, sin(o.ph) * m]; } },
+    swirl:     { d: () => 3, f: () => ({}), q: (o, p, st) => { const m = hold(p, .3), a = m * (3.2 - clamp(Math.hypot(o.lx, o.ly) / S * 3.5, 0, 2.8)) * st.dir, c = cos(a), s = sin(a); return [o.lx * c - o.ly * s - o.lx, o.lx * s + o.ly * c - o.ly]; } },
     teleport:  { d: () => 2.2, mv: 1, pre: st => st.dist = Math.max(st.dist, SW * .4), f: () => ({}), q: (o, p, st) => { const u = ease((p - o.delay * .45) / .55); return [st.dir * st.dist * u, -hop(u) * S * (.3 + o.rr * .4)]; } },
-    laugh:     { d: () => 2, f: p => ({ y: -Math.abs(Math.sin(p * 14 * Math.PI)) * S * .03, r: J.fl * .12 * hold(p, .2) + Math.sin(p * 7 * Math.PI) * .04 }) },
-    lookAround:{ d: () => 2.8, f: p => ({ fl: p < .33 ? J.fl : p < .66 ? -J.fl : J.fl, r: (p < .33 ? .1 : p < .66 ? -.1 : 0) * J.fl }) },
-    hiccup:    { d: () => 2, f: p => { const s = Math.max(0, 1 - Math.abs(p - .3) * 18) + Math.max(0, 1 - Math.abs(p - .7) * 18); return { y: -s * S * .08, sy: 1 + s * .08 }; } },
-    stretch:   { d: () => 2.6, f: p => ({ sy: 1 + .25 * hold(p, .35), sx: 1 - .1 * hold(p, .35), r: Math.sin(p * TAU) * .05 }) },
-    bow:       { d: () => 2.2, f: p => ({ r: J.fl * .45 * hold(p, .3), y: S * .1 * hold(p, .3) }) },
-    dizzy:     { d: () => 3, f: p => ({ x: Math.cos(p * 6 * Math.PI) * S * .06 * (1 - p), y: Math.sin(p * 6 * Math.PI) * S * .03 * (1 - p), r: Math.sin(p * 6 * Math.PI) * .2 * (1 - p) }) },
-    heart:     { d: () => 3.6, f: p => ({ tint: [255, 60, 150, .75 * hold(p, .25)] }), q: (o, p, st, ps) => { const m = hold(p, .25), u = o.ph, k = Math.sqrt(o.rr) * S / 34;
-      return [(16 * Math.sin(u) ** 3 * k - o.lx * ps.fl) * m, (-(13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u)) * k - o.ly) * m]; } },
+    laugh:     { d: () => 2.2, f: p => { const m = hold(p, .2); return { y: -abs(sin(p * 14 * PI)) * S * .03, hp: -.35 * m, hr: J.fl * .12 * m + sin(p * 7 * PI) * .08, r: -.05 * m }; } },
+    lookAround:{ d: () => 3.4, f: p => ({ hy: (p < .45 ? ease(p / .2) * .85 : p < .9 ? .85 - 1.7 * ease((p - .45) / .2) : -.85 * (1 - ease((p - .9) / .1))) * J.fl, hp: -.08 * hop(p), yaw: (p < .45 ? .2 : -.2) * J.fl * hop(p) }) },
+    hiccup:    { d: () => 2, f: p => { const s = Math.max(0, 1 - abs(p - .3) * 18) + Math.max(0, 1 - abs(p - .7) * 18); return { y: -s * S * .08, sy: 1 + s * .08, hp: -s * .3 }; } },
+    stretch:   { d: () => 2.8, f: p => { const m = hold(p, .35); return { sy: 1 + .22 * m, sx: 1 - .1 * m, hp: -.35 * m, hr: sin(p * TAU) * .1 }; } },
+    bow:       { d: () => 2.4, f: p => { const m = hold(p, .3); return { r: J.fl * .3 * m, hp: .55 * m, y: S * .08 * m }; } },
+    dizzy:     { d: () => 3, f: p => { const k = 1 - p, a = p * 6 * PI; return { x: cos(a) * S * .05 * k, y: sin(a) * S * .02 * k, r: sin(a) * .12 * k, hr: sin(a + 1) * .3 * k, hy: cos(a) * .4 * k }; } },
+    heart:     { d: () => 3.6, f: p => ({ tint: [255, 60, 150, .75 * hold(p, .25)] }), q: (o, p) => { const m = hold(p, .25), u = o.ph, k = Math.sqrt(o.rr) * S / 34;
+      return [(16 * sin(u) ** 3 * k - o.lx) * m, (-(13 * cos(u) - 5 * cos(2 * u) - 2 * cos(3 * u) - cos(4 * u)) * k - o.ly) * m]; } },
   };
   const NAMES = Object.keys(A);
 
@@ -685,7 +691,7 @@ addEventListener('keydown', e => {
     let dir = rnd() < .5 ? -1 : 1; if (room[dir] < S * .3) dir = -dir;
     const st = { dir, dist: clamp(S * (.6 + rnd() * 1.4), 0, Math.max(0, room[dir])) };
     A[name].pre?.(st); st.d = A[name].d(st);
-    if (A[name].mv && st.dist < S * .15) return start(NAMES.filter(n => !A[n].mv)[rnd() * 20 | 0], t);
+    if (A[name].mv && st.dist < S * .15) { const rest = NAMES.filter(n => !A[n].mv); return start(rest[rnd() * rest.length | 0], t); }
     Object.assign(J, { act: name, st, t0: t, last: name });
   }
   window.jokerAct = name => A[name] ? (start(name, performance.now() / 1000), name) : NAMES;
@@ -698,15 +704,26 @@ addEventListener('keydown', e => {
     const t = document.createElement('canvas'); t.width = dw; t.height = dh;
     const tc = t.getContext('2d'); tc.drawImage(im, 0, 0, dw, dh);
     const d = tc.getImageData(0, 0, dw, dh).data, old = P; P = [];
+    const neck = dh * .26;                               // 이보다 아래(보라 옷)는 몸, 위는 머리
     for (let y = 0; y < dh; y += step) for (let x = 0; x < dw; x += step) {
       const i = (y * dw + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
       if (r + g + b < 60) continue;                      // 검은 배경은 버린다
       const lx = x - dw / 2 + (rnd() - .5) * 1.5, ly = y - dh / 2 + (rnd() - .5) * 1.5;
-      const a = clamp((dh / 2 - ly) / (dh * .16)) * clamp((dw / 2 - Math.abs(lx)) / (dw * .2)); // 잘린 아래·양옆은 흐리게
+      const a = clamp((dh / 2 - ly) / (dh * .16)) * clamp((dw / 2 - abs(lx)) / (dw * .2)); // 잘린 아래·양옆은 흐리게
       if (a < .05) continue;
       const o = old[P.length], ang = rnd() * TAU, R = Math.max(W, H) * (.4 + rnd() * .5);
-      P.push({ lx, ly, a, x: o ? o.x : first ? J.bx + Math.cos(ang) * R : J.bx + lx, y: o ? o.y : first ? J.by + Math.sin(ang) * R : J.by + ly, vx: 0, vy: 0,
+      P.push({ lx, ly, a, head: ly < neck, hair: g > r * 1.15 && g > b * 1.05, z: 0, k: .05, damp: .84,
+        x: o ? o.x : first ? J.bx + cos(ang) * R : J.bx + lx, y: o ? o.y : first ? J.by + sin(ang) * R : J.by + ly, vx: 0, vy: 0,
         r: Math.min(255, r * 1.25), g: Math.min(255, g * 1.25), b: Math.min(255, b * 1.25), ph: rnd() * TAU, rr: rnd(), sp: 0, delay: rnd() * .9 });
+    }
+    // 머리는 구, 몸은 납작한 타원으로 보고 깊이를 준다. 머리카락 끝은 느슨하게(출렁임).
+    const hs = P.filter(q => q.head), n = hs.length || 1;
+    HC.x = hs.reduce((s, q) => s + q.lx, 0) / n; HC.y = hs.reduce((s, q) => s + q.ly, 0) / n; HC.neck = neck;
+    HC.r = Math.max(...hs.map(q => Math.hypot(q.lx - HC.x, q.ly - HC.y)), 1);
+    const bw = Math.max(...P.filter(q => !q.head).map(q => abs(q.lx)), 1);
+    for (const q of P) {
+      if (q.head) { const e = Math.hypot(q.lx - HC.x, q.ly - HC.y) / HC.r; q.z = Math.sqrt(clamp(1 - e * e)) * HC.r * .85; q.k = q.hair ? .028 - .012 * e : .05; q.damp = q.hair ? .9 : .84; }
+      else { q.z = Math.sqrt(clamp(1 - (q.lx / bw) ** 2)) * bw * .45; q.k = .065; q.damp = .82; }
     }
     img = ctx.createImageData(W, H); px = img.data; first = false;
     if (still) { for (const q of P) { q.x = J.bx + q.lx; q.y = J.by + q.ly; } draw({}); }
@@ -715,33 +732,52 @@ addEventListener('keydown', e => {
   function step(t) {
     const age = t - born;
     if (!J.act && age > J.next) start(NAMES.filter(n => n !== J.last)[rnd() * (NAMES.length - 1) | 0], t);
-    let ps = { fl: J.fl }, p = 0;
+    let ps = {}, p = 0;
     if (J.act) {
       const a = A[J.act]; p = clamp((t - J.t0) / J.st.d);
-      ps = { fl: J.fl, ...a.f(p, J.st) };
+      ps = a.f(p, J.st);
       if (p >= 1) {
         if (a.mv) J.bx = clamp(J.bx + J.st.dir * J.st.dist, minX(), maxX());
         if (a.face) J.fl = J.st.dir;
-        J.act = null; J.next = age + .8 + rnd() * 1.8; ps = { fl: J.fl };
+        J.act = null; J.next = age + .8 + rnd() * 1.8; ps = {};
       }
-    } else ps.sy = 1 + Math.sin(t * 2.2) * .015;      // 숨쉬기
-    const fn = J.act && A[J.act].q, fl = ps.fl ?? 1, sx = (ps.sx ?? 1) * fl, sy = ps.sy ?? 1, rc = Math.cos(ps.r || 0), rs = Math.sin(ps.r || 0);
-    const ox = J.bx + (ps.x || 0), oy = J.by + (ps.y || 0), scan = (t % 7) / 7 * Math.max(W, H) * .9;
+    }
+    // 평소: 숨쉬기 + 마우스 쪽 쳐다보기(없으면 천천히 두리번)
+    const look = mx > -1e3, ehx = J.bx + (ps.x || 0) + HC.x, ehy = J.by + (ps.y || 0) + HC.y;
+    const ly0 = look ? clamp((mx - ehx) / (S * 1.2), -1, 1) * .55 : sin(t * .45) * .3 + J.fl * .12;
+    const lp0 = look ? clamp((my - ehy) / (S * 1.2), -1, 1) * .3 : sin(t * .33) * .06;
+    J.ly = (J.ly ?? 0) + (ly0 - (J.ly ?? 0)) * .08; J.lp = (J.lp ?? 0) + (lp0 - (J.lp ?? 0)) * .08;
+    const calm = J.act ? .25 : 1;                        // 동작 중엔 쳐다보기를 약하게
+    const sy = (ps.sy ?? 1) * (J.act ? 1 : 1 + sin(t * 2.2) * .015), sx = ps.sx ?? 1;
+    const Y = ps.yaw || 0, cy_ = cos(Y), sy_ = sin(Y), rc = cos(ps.r || 0), rs = sin(ps.r || 0);
+    const hY = (ps.hy || 0) + J.ly * calm, hP = (ps.hp || 0) + J.lp * calm, hR = (ps.hr || 0) + sin(t * .7) * .03;
+    const hyc = cos(hY), hys = sin(hY), hpc = cos(hP), hps = sin(hP), hrc = cos(hR), hrs = sin(hR);
+    const fn = J.act && A[J.act].q, ox = J.bx + (ps.x || 0), oy = J.by + (ps.y || 0), scan = (t % 7) / 7 * Math.max(W, H) * .9;
     for (const q of P) {
-      const k = clamp((age - q.delay) / 1.6) * .045;    // 등장: 늦게 출발한 점일수록 늦게 모인다
-      const lx = q.lx * sx, ly = S / 2 + (q.ly - S / 2) * sy;  // 크기 변화는 발밑 기준
-      let hx = ox + lx * rc - ly * rs, hy = oy + lx * rs + ly * rc;
+      let x = q.lx, y = q.ly, z = q.z;
+      if (q.head) {                                      // 머리: 중심 기준 좌우·끄덕 → 목 기준 갸웃
+        let hx = x - HC.x, hy = y - HC.y;
+        const x1 = hx * hyc + z * hys, z1 = -hx * hys + z * hyc;
+        const y1 = hy * hpc - z1 * hps; z = hy * hps + z1 * hpc;
+        x = x1 + HC.x; y = y1 + HC.y;
+        const nx = x - HC.x, ny = y - HC.neck; x = HC.x + nx * hrc - ny * hrs; y = HC.neck + nx * hrs + ny * hrc;
+      }
+      if (q.hair) x += sin(t * 1.6 + q.ly * .03 + q.ph * .3) * 2.2;  // 바람에 날리는 머리카락
+      const x2 = x * cy_ + z * sy_; z = -x * sy_ + z * cy_; x = x2;  // 몸 전체 좌우 회전(입체)
+      q.back = z < -S * .05;
+      x *= sx; y = S / 2 + (y - S / 2) * sy;            // 크기 변화는 발밑 기준
+      let hx = ox + x * rc - y * rs, hy = oy + x * rs + y * rc;
       if (fn) { const [dx, dy] = fn(q, p, J.st, ps); hx += dx; hy += dy; }
-      hx += Math.sin(t * 1.4 + q.ly * .045 + q.ph) * 1.4 + Math.sin(t * .6 + q.ly * .012) * 2;
-      hy += Math.cos(t * 1.2 + q.lx * .04 + q.ph) * 1.4 + Math.sin(t * .8 + q.lx * .01) * 1.5;
+      hx += sin(t * 1.4 + q.ly * .045 + q.ph) * 1.1; hy += cos(t * 1.2 + q.lx * .04 + q.ph) * 1.1;
+      const k = clamp((age - q.delay) / 1.6) * q.k;      // 등장: 늦게 출발한 점일수록 늦게 모인다
       q.vx += (hx - q.x) * k; q.vy += (hy - q.y) * k;
       let ex = q.x - mx, ey = q.y - my, d2 = ex * ex + ey * ey;
-      if (d2 < 8100) { const d = Math.sqrt(d2) + 1, f = (1 - d / 90) * 2.2 / d; q.vx += ex * f; q.vy += ey * f; }
+      if (d2 < 3600) { const d = Math.sqrt(d2) + 1, f = (1 - d / 60) * 1.8 / d; q.vx += ex * f; q.vy += ey * f; }
       for (const B of bursts) { ex = q.x - B.x; ey = q.y - B.y; d2 = ex * ex + ey * ey; if (d2 < 40000) { const d = Math.sqrt(d2) + 1, f = (1 - d / 200) * 14 / d; q.vx += ex * f + (rnd() - .5) * 2; q.vy += ey * f + (rnd() - .5) * 2; q.sp = 1; } }
-      ex = q.x - ox; ey = q.y - oy; const dc = Math.sqrt(ex * ex + ey * ey), band = Math.abs(dc - scan);
+      ex = q.x - ox; ey = q.y - oy; const dc = Math.sqrt(ex * ex + ey * ey), band = abs(dc - scan);
       if (age > 2.5 && band < 10) { q.sp = Math.max(q.sp, 1 - band / 10); q.vx += ex / (dc + 1) * .5; q.vy += ey / (dc + 1) * .5; }
       if (rnd() < .0008) q.sp = 1;                       // 반짝임
-      q.vx *= .86; q.vy *= .86; q.x += q.vx; q.y += q.vy; q.sp *= .93;
+      q.vx *= q.damp; q.vy *= q.damp; q.x += q.vx; q.y += q.vy; q.sp *= .93;
     }
     bursts.length = 0;
     return ps;
@@ -753,13 +789,13 @@ addEventListener('keydown', e => {
     for (const q of P) {
       const xi = q.x | 0, yi = q.y | 0;
       if (xi < 0 || yi < 0 || xi >= W - 1 || yi >= H - 1) continue;
-      const v = Math.min(1, Math.hypot(q.vx, q.vy) / 6), s = q.sp;
-      // 빠른 점은 핑크·시안으로 달아오르고, 스캔·반짝임은 흰빛
+      const v = Math.min(1, Math.hypot(q.vx, q.vy) / 14) * .7, s = q.sp;
+      // 빠른 점은 핑크·시안으로 달아오르고, 스캔·반짝임은 흰빛, 뒤로 돌아간 점은 흐리게
       let r = q.r + (tr - q.r) * ta, g = q.g + (tg - q.g) * ta, b = q.b + (tb - q.b) * ta;
       r += (255 - r) * v * .9; g += (60 - g) * v * .6 + (240 - g) * v * .3; b += (220 - b) * v * .8;
       r = (r + (255 - r) * s) * dim; g = (g + (255 - g) * s) * dim; b = (b + (255 - b) * s) * dim;
-      const o = (yi * W + xi) * 4, al = 255 * q.a;
-      for (const j of [o, o + 4, o + W * 4, o + W * 4 + 4]) { px[j] = r; px[j + 1] = g; px[j + 2] = b; px[j + 3] = al; }
+      const o = (yi * W + xi) * 4, al = 255 * q.a * (q.back ? .3 : 1);
+      for (const j of [o, o + 4, o + W * 4, o + W * 4 + 4]) if (px[j + 3] < al) { px[j] = r; px[j + 1] = g; px[j + 2] = b; px[j + 3] = al; }
     }
     ctx.putImageData(img, 0, 0);
   }
