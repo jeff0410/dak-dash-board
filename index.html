@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RTMC Agents</title>
+<title>JEFF AGENTS</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
@@ -232,7 +235,7 @@ header{height:58px;flex:none;display:flex;align-items:center;gap:10px;padding:0 
 </head>
 <body>
 <header>
-  <div class="logo">RTMC AGENTS<small>애수기</small></div>
+  <div class="logo">JEFF AGENTS<small>애수기</small></div>
   <button class="chip" data-f="run"><span class="eq"><i></i><i></i><i></i></span>작업 중 <b id="nRun">0</b></button>
   <button class="chip" data-f="appr" id="chAppr"><span class="dot bg-appr"></span>승인 필요 <b id="nAppr">0</b></button>
   <button class="chip" data-f="stall"><span class="dot bg-stall"></span>응답 없음 <b id="nStall">0</b></button>
@@ -345,7 +348,7 @@ function renderHeader() {
   $('#nRun').textContent = c('run'); $('#nAppr').textContent = c('appr'); $('#nStall').textContent = c('stall'); $('#nIdle').textContent = c('idle') + c('done');
   $('#chAppr').classList.toggle('alert', c('appr') > 0);
   document.querySelectorAll('.chip[data-f]').forEach(b => b.classList.toggle('on', filter === b.dataset.f));
-  document.title = (c('appr') ? `(${c('appr')}) 승인 · ` : '') + 'RTMC Agents';
+  document.title = (c('appr') ? `(${c('appr')}) 승인 · ` : '') + 'JEFF AGENTS';
 }
 function cardHTML(s) {
   const st = stOf(s), f = cur(s);
