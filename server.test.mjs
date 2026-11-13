@@ -155,3 +155,21 @@ test('git diff 를 파일별 +/- 와 줄로 바꾼다', async () => {
   assert.deepEqual([f[0].a, f[0].r], [2, 1]);
   assert.deepEqual(f[0].diff, [['c', '⋯ fn'], ['c', 'keep'], ['r', 'old'], ['a', 'new'], ['a', 'more']]);
 });
+
+test('파일 업로드는 로그인 · 같은 사이트만, 이름은 안전하게 바꿔 600 으로 저장한다', async () => {
+  const cfg = newCfg(); cfg.DASH_TOTP_SECRET = b32encode(Buffer.from('uploaduploadupload12'));
+  cfg.UPLOAD_DIR = mkdtempSync(join(tmpdir(), 'up-'));
+  await withServer(cfg, async base => {
+    const up = (h = {}) => fetch(base + '/api/upload', { method: 'POST', headers: { 'X-File-Name': encodeURIComponent('../캡처 1.png'), ...h }, body: Buffer.from([137, 80, 78, 71]) });
+    assert.equal((await up()).status, 401);
+    const pre = ck(await post(base, '/login', { user: 'admin', password: PW }), 'dash_pre');
+    const sid = ck(await post(base, '/login/otp', { code: nowCode(cfg.DASH_TOTP_SECRET) }, { cookie: pre }), 'dash_sid');
+    assert.equal((await up({ cookie: sid, Origin: 'https://evil.example' })).status, 403);
+    const r = await up({ cookie: sid });
+    assert.equal(r.status, 200);
+    const { path } = await r.json();
+    assert.ok(path.startsWith(cfg.UPLOAD_DIR + '/'));
+    assert.match(path, /-_캡처_1\.png$|-캡처_1\.png$/);
+    assert.equal(statSync(path).mode & 0o777, 0o600);
+  });
+});
