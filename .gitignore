@@ -16,3 +16,11 @@ bg.png
 node_modules/
 *.log
 .DS_Store
+
+# 파비콘(저작권 있는 이미지로 만든 것) — 로컬에만
+favicon-*.png
+apple-touch-icon.png
+joker-*.png
+
+# OTP 시크릿 — 절대 커밋 금지
+.totp-secret
